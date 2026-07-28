@@ -1,0 +1,122 @@
+@import "tailwindcss";
+
+/* Chulho design tokens — warm paper, structural madder red, brass detail.
+   Single light theme: this is a paper menu, deliberately. */
+:root {
+  --paper: #fcfaf4;
+  --paper-deep: #f3edde;
+  --ink: #2a211c;
+  --ink-soft: #6f6055;
+  --madder: #9e2b25;
+  --madder-deep: #6f1d18;
+  --brass: #a87b2f;
+  --leaf: #55703c;
+  --line: #e3d9c6;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-paper-deep: var(--paper-deep);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-madder: var(--madder);
+  --color-madder-deep: var(--madder-deep);
+  --color-brass: var(--brass);
+  --color-leaf: var(--leaf);
+  --color-line: var(--line);
+  --font-display: var(--font-young-serif);
+  --font-sans: var(--font-figtree);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-figtree), system-ui, sans-serif;
+}
+
+:focus-visible {
+  outline: 2px solid var(--madder);
+  outline-offset: 2px;
+}
+
+/* Signature: dhaka-weave zigzag band (header hem, reservation ticket). */
+.dhaka-band {
+  --band: var(--madder);
+  height: 12px;
+  background:
+    linear-gradient(135deg, var(--band) 25%, transparent 25%) -6px 0 / 12px 12px,
+    linear-gradient(225deg, var(--band) 25%, transparent 25%) -6px 0 / 12px 12px,
+    linear-gradient(315deg, var(--band) 25%, transparent 25%) 0 0 / 12px 12px,
+    linear-gradient(45deg, var(--band) 25%, transparent 25%) 0 0 / 12px 12px;
+}
+
+.dhaka-band-brass {
+  --band: var(--brass);
+}
+
+/* Dotted price leaders, as on a printed menu. */
+.leader {
+  flex: 1 1 2rem;
+  min-width: 2rem;
+  align-self: flex-end;
+  margin-bottom: 0.35em;
+  border-bottom: 2px dotted var(--line);
+}
+
+@layer components {
+  .eyebrow {
+    font-size: 0.75rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--brass);
+    font-weight: 600;
+  }
+
+  .btn {
+    display: inline-block;
+    padding: 0.625rem 1.25rem;
+    border-radius: 0.25rem;
+    font-weight: 600;
+    transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+  }
+
+  .btn-primary {
+    background: var(--madder);
+    color: var(--paper);
+  }
+  .btn-primary:hover {
+    background: var(--madder-deep);
+  }
+
+  .btn-secondary {
+    border: 1px solid var(--line);
+    color: var(--ink);
+    background: transparent;
+  }
+  .btn-secondary:hover {
+    border-color: var(--brass);
+    color: var(--madder-deep);
+  }
+
+  .chip {
+    display: inline-block;
+    padding: 0 0.375rem;
+    border: 1px solid currentColor;
+    border-radius: 0.125rem;
+    font-size: 0.625rem;
+    line-height: 1.1rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    vertical-align: 0.15em;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

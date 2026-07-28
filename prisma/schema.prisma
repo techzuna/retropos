@@ -1,0 +1,118 @@
+// Data model — see DESIGN.md for the ER diagram and integrity rules.
+// The double-booking exclusion constraint lives in raw SQL inside the
+// initial migration (btree_gist), not in this schema.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Restaurant {
+  id                 String   @id @default(cuid())
+  name               String
+  address            String
+  phone              String
+  description        String   @default("")
+  currency           String   @default("USD") // ISO 4217, for menu price display
+  timezone           String // IANA, e.g. "Asia/Kolkata"
+  openingHours       Json // WeeklyHours: { mon?: [{open, close}], ... }
+  closedDates        Json     @default("[]") // ["YYYY-MM-DD", ...]
+  diningDurationMin  Int      @default(90)
+  slotIntervalMin    Int      @default(30)
+  bookingHorizonDays Int      @default(60)
+  cancelCutoffMin    Int      @default(120)
+  maxPartySize       Int      @default(8)
+
+  tables         DiningTable[]
+  menuCategories MenuCategory[]
+  reservations   Reservation[]
+  users          User[]
+}
+
+model DiningTable {
+  id           String     @id @default(cuid())
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  name         String
+  capacity     Int
+  active       Boolean    @default(true)
+
+  reservations Reservation[]
+}
+
+model MenuCategory {
+  id           String     @id @default(cuid())
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  name         String
+  sortOrder    Int        @default(0)
+  published    Boolean    @default(true)
+
+  items MenuItem[]
+}
+
+model MenuItem {
+  id          String       @id @default(cuid())
+  categoryId  String
+  category    MenuCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  name        String
+  description String       @default("")
+  priceCents  Int
+  dietaryTags String[]     @default([])
+  available   Boolean      @default(true) // the "86" toggle
+  published   Boolean      @default(true)
+  sortOrder   Int          @default(0)
+}
+
+enum ReservationStatus {
+  confirmed
+  seated
+  completed
+  cancelled
+  no_show
+}
+
+enum ReservationSource {
+  online
+  staff
+}
+
+model Reservation {
+  id           String            @id @default(cuid())
+  restaurantId String
+  restaurant   Restaurant        @relation(fields: [restaurantId], references: [id])
+  tableId      String
+  table        DiningTable       @relation(fields: [tableId], references: [id])
+  startsAt     DateTime          @db.Timestamptz(3)
+  endsAt       DateTime          @db.Timestamptz(3) // always startsAt + diningDuration, computed server-side
+  partySize    Int
+  guestName    String
+  guestEmail   String
+  guestPhone   String
+  notes        String            @default("")
+  status       ReservationStatus @default(confirmed)
+  cancelToken  String            @unique // ≥128-bit random; the diner's only credential
+  source       ReservationSource @default(online)
+  createdAt    DateTime          @default(now()) @db.Timestamptz(3)
+
+  @@index([restaurantId, startsAt])
+  @@index([tableId, startsAt])
+}
+
+enum StaffRole {
+  manager
+  staff
+}
+
+model User {
+  id           String     @id @default(cuid())
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  email        String     @unique
+  name         String
+  role         StaffRole  @default(staff)
+}
