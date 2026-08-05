@@ -13,6 +13,14 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  {
+    // `server.js` is the Passenger entry point for cPanel-style hosting. It runs
+    // on the host's bare Node without passing through the Next compiler, and
+    // Passenger's shim hooks CommonJS, so `require()` is the compatible choice
+    // rather than a style lapse. Everything else still applies to the file.
+    files: ["server.js"],
+    rules: { "@typescript-eslint/no-require-imports": "off" },
+  },
 ]);
 
 export default eslintConfig;

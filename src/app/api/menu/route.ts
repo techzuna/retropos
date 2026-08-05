@@ -1,6 +1,10 @@
-import { NextResponse } from "next/server";
-import { getPublishedMenu } from "@/lib/menu";
+import { getOrderingMenu } from "@/lib/menu";
+import { requireRole } from "@/lib/session";
+import { handle } from "../respond";
 
 export async function GET() {
-  return NextResponse.json(await getPublishedMenu());
+  return handle(async () => {
+    const session = await requireRole("staff");
+    return { categories: await getOrderingMenu(session) };
+  });
 }

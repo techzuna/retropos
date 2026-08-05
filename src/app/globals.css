@@ -112,6 +112,25 @@ body {
   }
 }
 
+/* Bill printing: strip the app chrome, fit 80mm thermal rolls and A4. */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: white;
+  }
+  .bill {
+    max-width: 72mm;
+    margin: 0 auto;
+    border: none;
+    padding: 0;
+  }
+  @page {
+    margin: 6mm;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

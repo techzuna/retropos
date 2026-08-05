@@ -1,46 +1,26 @@
-import { NextResponse, type NextRequest } from "next/server";
-import { BookingError, createReservation } from "@/lib/booking";
-import { rateLimit } from "@/lib/rate-limit";
-import { createReservationSchema } from "@/lib/validation";
-import { publicReservation } from "../reservation-view";
+import { createReservation, listReservations } from "@/lib/reservations";
+import { requireRole } from "@/lib/session";
+import { reservationQuerySchema, reservationSchema } from "@/lib/validation";
+import { handle } from "../respond";
 
-export async function POST(request: NextRequest) {
-  // First XFF hop is trustworthy on Vercel (the platform overwrites it);
-  // revisit if hosting moves somewhere that forwards client-supplied XFF.
-  const ip = (request.headers.get("x-forwarded-for") ?? "local").split(",")[0].trim();
-  if (!rateLimit(`reserve:${ip}`)) {
-    return NextResponse.json(
-      { error: "Too many booking attempts — please try again in a few minutes." },
-      { status: 429 },
-    );
-  }
+// Bookings are floor work — whoever answers the phone takes them — so these are
+// staff-level, like seating and settling.
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Send booking details as JSON." }, { status: 400 });
-  }
+export async function GET(request: Request) {
+  return handle(async () => {
+    const session = await requireRole("staff");
+    const url = new URL(request.url);
+    const { date } = reservationQuerySchema.parse({
+      date: url.searchParams.get("date") ?? undefined,
+    });
+    return await listReservations(session, date);
+  });
+}
 
-  const parsed = createReservationSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json(
-      {
-        error: "Check the booking details.",
-        issues: parsed.error.issues.map((i) => ({ field: i.path.join("."), message: i.message })),
-      },
-      { status: 422 },
-    );
-  }
-
-  try {
-    const reservation = await createReservation(parsed.data);
-    return NextResponse.json(publicReservation(reservation), { status: 201 });
-  } catch (err) {
-    if (err instanceof BookingError) {
-      const status = err.code === "SLOT_UNAVAILABLE" ? 409 : 422;
-      return NextResponse.json({ error: err.message, code: err.code }, { status });
-    }
-    throw err;
-  }
+export async function POST(request: Request) {
+  return handle(async () => {
+    const session = await requireRole("staff");
+    const input = reservationSchema.parse(await request.json());
+    return await createReservation(session, input);
+  });
 }
