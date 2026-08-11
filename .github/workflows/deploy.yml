@@ -79,8 +79,9 @@ jobs:
               echo "  /restroreserve/   not   /home/you/restroreserve/"
               exit 1 ;;
           esac
-          # The backup JSONs under data/ contain every password and PIN hash in
-          # the organization. Under the web root they are downloadable by URL.
+          # The database and the backup JSONs under data/ hold every password
+          # hash, PIN hash and customer phone number in the business. Anywhere
+          # a web server serves files directly, they are one URL away.
           case "$REMOTE_PATH" in
             */public_html/*|*/public_html/)
               echo "::error::FTP_REMOTE_PATH is inside public_html: $REMOTE_PATH"
@@ -89,6 +90,23 @@ jobs:
               echo "every password and PIN hash — become downloadable."
               echo "Use a directory beside public_html and point the cPanel"
               echo "Node app's Application URL at your subdomain instead."
+              exit 1 ;;
+          esac
+          # A trailing segment that looks like a hostname is almost always a
+          # document root — cPanel names subdomain docroots after the domain.
+          # Learned the hard way: deploying to /restroreserve.example.com/ put
+          # the whole build behind an open directory listing.
+          leaf=$(basename "$REMOTE_PATH")
+          case "$leaf" in
+            *.*.*|*.com|*.net|*.org|*.io|*.np)
+              echo "::error::FTP_REMOTE_PATH looks like a document root: $REMOTE_PATH"
+              echo "cPanel names a subdomain's document root after the domain,"
+              echo "and anything inside one is served as static files — your"
+              echo "database and backups included."
+              echo "Use a plain directory that is NOT a document root, e.g."
+              echo "  /restroreserve/"
+              echo "and in Setup Node.js App set Application root to that"
+              echo "directory while Application URL stays your subdomain."
               exit 1 ;;
           esac
 
@@ -282,6 +300,33 @@ jobs:
             **/node_modules/**
             **/data/**
             **/.env*
+
+      # The path checks are heuristics; this is the measurement. If the app
+      # root turns out to be web-served, files we just uploaded are fetchable
+      # by URL — and the next thing to land there is the database.
+      - name: Check the upload is not publicly downloadable
+        if: ${{ vars.APP_ORIGIN != '' }}
+        env:
+          ORIGIN: ${{ vars.APP_ORIGIN }}
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "https://$ORIGIN/package.json" || echo 000)
+          echo "https://$ORIGIN/package.json -> $code"
+          if [ "$code" = "200" ]; then
+            echo "::error::The application root is being served as static files."
+            echo "Anyone can fetch https://$ORIGIN/package.json — and, once you"
+            echo "upload it, https://$ORIGIN/data/app.db, which holds every"
+            echo "password hash, PIN hash and customer phone number."
+            echo ""
+            echo "Move the app root out of the document root:"
+            echo "  1. Setup Node.js App → Application root: a plain directory"
+            echo "     such as 'restroreserve' (NOT the subdomain folder)."
+            echo "  2. Application URL stays your subdomain — Passenger routes"
+            echo "     it to the app; nothing is served statically."
+            echo "  3. Update the FTP_REMOTE_PATH variable to match."
+            echo "  4. Delete the files already uploaded to the document root."
+            exit 1
+          fi
+          echo "Not statically served — good."
 
       - name: What to check
         run: |
