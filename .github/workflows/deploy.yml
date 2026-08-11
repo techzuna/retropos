@@ -221,6 +221,12 @@ jobs:
               export MANPATH="" INFOPATH="" PKG_CONFIG_PATH=""
               # The stock CentOS 7 gcc predates C++17.
               source /opt/rh/devtoolset-10/enable
+              # manylinux keeps its interpreters under /opt/python/cp3XX-cp3XX
+              # and puts none of them on PATH, so node-gyp reports "Could not
+              # find any Python installation to use" on an image full of them.
+              export PYTHON=$(ls -d /opt/python/cp31*/bin/python3 /opt/python/cp3*/bin/python3 2>/dev/null | head -1)
+              export PATH="$(dirname "$PYTHON"):$PATH"
+              echo "python: $PYTHON ($($PYTHON --version 2>&1))"
               # Node 16 is the last official build that RUNS on glibc 2.17 —
               # Node 18+ needs 2.28, so it cannot even start in here. We only
               # need it to drive node-gyp; --target below fetches headers for
