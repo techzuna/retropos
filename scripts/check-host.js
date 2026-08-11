@@ -39,15 +39,6 @@ ok("node", process.version);
 // ~/nodevenv/<app>/<major>/, and a native module built for one ABI will not
 // load in another. A check that passes under the wrong Node proves nothing.
 ok("node binary", process.execPath);
-if (!/nodevenv/.test(process.execPath)) {
-  console.log(
-    "  WARN  not the application virtualenv — this is the panel's default Node.",
-  );
-  console.log(
-    "        Make sure its major matches Setup Node.js App, or the native",
-  );
-  console.log("        module results below do not describe your app.");
-}
 ok("cwd", process.cwd());
 const dataDir = process.env.DATA_DIR
   ? path.resolve(process.env.DATA_DIR)
@@ -68,18 +59,33 @@ if (!/^https:\/\//.test(process.env.APP_URL || "")) {
 
 // 2. The native module. This is the one that silently kills shared hosting.
 console.log("\nDatabase driver");
-// Report the compiled artefact itself. "Could not locate the bindings file"
-// means this is missing or built for another ABI, and knowing whether it
-// exists separates "the compile never ran" from "it ran for a different Node".
-for (const base of [
-  path.join(process.cwd(), "node_modules", "better-sqlite3"),
-  path.join(process.cwd(), "..", "nodevenv"),
-]) {
-  const binding = path.join(base, "build", "Release", "better_sqlite3.node");
+// Resolve where better-sqlite3 actually lives — on CloudLinux that is a
+// virtualenv far from cwd — and say outright whether its compiled binary is
+// there. "Could not locate the bindings file" prints thirteen candidate paths
+// and buries the one fact that matters: was anything ever built?
+let pkgDir = null;
+try {
+  pkgDir = path.dirname(require.resolve("better-sqlite3/package.json"));
+  ok("installed at", pkgDir);
+  const binding = path.join(pkgDir, "build", "Release", "better_sqlite3.node");
   if (fs.existsSync(binding)) {
     const s = fs.statSync(binding);
-    ok("binding", `${binding} (${(s.size / 1024).toFixed(0)} KB, built ${s.mtime.toISOString().slice(0, 16)})`);
+    ok(
+      "compiled binary",
+      `${(s.size / 1024).toFixed(0)} KB, built ${s.mtime.toISOString().slice(0, 16)}`,
+    );
+  } else {
+    bad("compiled binary", "missing — nothing was ever built here");
+    console.log(
+      "\n  The rebuild did not produce a binary. Press Run NPM Install and read\n" +
+        "  its output: lines with node-gyp / CXX / SOLINK mean it is compiling,\n" +
+        "  while 'gyp ERR!' naming python3, make or g++ means this plan has no\n" +
+        "  compiler — and then this app cannot run here, because its database\n" +
+        "  driver is a native module.\n",
+    );
   }
+} catch {
+  bad("better-sqlite3", "not installed at all — press Run NPM Install");
 }
 
 let Database;
