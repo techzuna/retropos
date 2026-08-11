@@ -199,30 +199,50 @@ jobs:
           NODE_MAJOR: ${{ vars.NODE_VERSION || 22 }}
         run: |
           version=$(node -p "require('./node_modules/better-sqlite3/package.json').version")
-          echo "building better-sqlite3@$version for Node ${NODE_MAJOR}.x"
+          # Build for both LTS ABIs so either cPanel Node setting works:
+          # "<semver>:<abi>" pairs, read from Node's own release index.
+          targets=$(curl -fsSL https://nodejs.org/dist/index.json | node -e '
+            let d = ""; process.stdin.on("data", c => d += c).on("end", () => {
+              const rel = JSON.parse(d);
+              const out = [];
+              for (const major of ["20", "22"]) {
+                const r = rel.find(x => x.version.startsWith("v" + major + ".") && x.modules);
+                if (r) out.push(r.version.slice(1) + ":" + r.modules);
+              }
+              console.log(out.join(" "));
+            });')
+          echo "better-sqlite3@$version for $targets"
           mkdir -p vendor
           docker run --rm -v "$PWD/vendor":/out \
-            -e VERSION="$version" -e NODE_MAJOR="$NODE_MAJOR" \
+            -e VERSION="$version" -e TARGETS="$targets" \
             quay.io/pypa/manylinux2014_x86_64 bash -eo pipefail -c '
-              # No `set -u` here: the devtoolset enable script appends to
-              # MANPATH/INFOPATH without defaulting them, so an unbound-variable
-              # check kills the build before gcc is even on PATH.
+              # No `set -u`: the devtoolset enable script appends to MANPATH
+              # without defaulting it, killing the build before gcc is on PATH.
               export MANPATH="" INFOPATH="" PKG_CONFIG_PATH=""
-              # devtoolset-10: the stock CentOS 7 gcc is too old for C++17.
+              # The stock CentOS 7 gcc predates C++17.
               source /opt/rh/devtoolset-10/enable
-              url=$(curl -fsSL https://nodejs.org/dist/index.json \
-                | grep -o "\"version\":\"v'"$NODE_MAJOR"'\.[0-9.]*\"" | head -1 \
-                | sed "s/.*v/https:\/\/nodejs.org\/dist\/v/;s/\"//" )
-              ver=$(basename "$url")
-              curl -fsSL "https://nodejs.org/dist/$ver/node-$ver-linux-x64.tar.xz" | tar -xJ -C /opt
-              export PATH="/opt/node-$ver-linux-x64/bin:$PATH"
-              abi=$(node -p "process.versions.modules")
-              echo "node $(node -v), ABI $abi, glibc $(ldd --version | head -1)"
+              # Node 16 is the last official build that RUNS on glibc 2.17 —
+              # Node 18+ needs 2.28, so it cannot even start in here. We only
+              # need it to drive node-gyp; --target below fetches headers for
+              # the real target, so the ABI of the binary is unrelated to the
+              # Node executing the build.
+              curl -fsSL https://nodejs.org/dist/v16.20.2/node-v16.20.2-linux-x64.tar.xz | tar -xJ -C /opt
+              export PATH="/opt/node-v16.20.2-linux-x64/bin:$PATH"
+              echo "builder node $(node -v) on $(ldd --version | head -1)"
               mkdir -p /build && cd /build && npm init -y >/dev/null
-              npm install "better-sqlite3@$VERSION" --build-from-source \
+              # --ignore-scripts: skip the prebuild download entirely. The
+              # SQLite amalgamation ships inside the package, so the sources
+              # are all present without running the install script.
+              npm install "better-sqlite3@$VERSION" --ignore-scripts \
                 --no-audit --no-fund --loglevel=error
-              cp node_modules/better-sqlite3/build/Release/better_sqlite3.node \
-                 "/out/better_sqlite3-abi${abi}-linux-x64.node"
+              cd node_modules/better-sqlite3
+              for pair in $TARGETS; do
+                ver=${pair%%:*}; abi=${pair##*:}
+                echo "--- compiling for node v$ver (ABI $abi)"
+                npx --yes node-gyp@10 rebuild --release \
+                  --target="$ver" --arch=x64 --dist-url=https://nodejs.org/dist
+                cp build/Release/better_sqlite3.node "/out/better_sqlite3-abi${abi}-linux-x64.node"
+              done
             '
           ls -la vendor/
           # Prove it targets an old glibc — otherwise we would ship the same
