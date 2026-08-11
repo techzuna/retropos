@@ -14,6 +14,16 @@ Append-only history of working sessions and decisions for RestroReserve. **Newes
 
 ---
 
+### 2026-08-12 — Live on the shared host: login works
+- **Context:** `/loop fix this issue, deploy and test the url with login` — iterate until sign-in works at https://restroreserve.amoknepal.com.
+- **The blocker, finally pinned down:** `better-sqlite3` could not load, for two independent reasons that between them close every normal route on this host. It publishes **no prebuild for Node 20's ABI (115) at all**, so npm falls through to a source build — and the plan has no compiler, so nothing was produced ("Could not locate the bindings file"). Node 22 does have a prebuild, but it links against **glibc 2.29+** while CloudLinux 7 ships **2.17**, so it installs and then refuses to load. Prebuilt: too new. Compile: impossible.
+- **Fix — ship a binary built for the host.** CI compiles `better_sqlite3.node` inside `manylinux2014` (which *is* CentOS 7, glibc 2.17) for both ABI 115 and 127, and `scripts/install-native.js` copies the matching one into the installed package from `server.js` at boot. Because a deploy already touches `tmp/restart.txt`, a release now repairs the driver by itself with nobody in the hosting panel. Verified: the emitted binary needs only `GLIBC_2.14`.
+  - Node 18+ official builds require glibc 2.28 and cannot even *start* inside that container. Node 16 (the last that runs on 2.17) drives the build; `node-gyp --target` fetches headers for the real target, so the binary's ABI is unrelated to the Node executing the build.
+  - Removed the earlier `.npmrc build_from_source=true` and the `postinstall` rebuild: on a host with no compiler they turn a working `npm install` into a failed one, which is how it ended up with no binary at all.
+- **What made the loop possible:** `GET /api/health` probes the driver, WebAssembly and the database independently and returns coarse fault codes (`native-binding-missing`, `database-file-missing`, `schema-missing`…) with no token needed. Before it, every diagnosis needed someone at the panel pasting `stderr.log`; after it, each iteration was a deploy and a curl. It also settled the WASM/LVE worry — `wasm: ok`, so the `--wasm-enforce-bounds-checks` flag in `server.js` did its job.
+- **Verified live:** `/api/health` all-ok; wrong password 401 and correct password 200 with a session cookie; owner reaches `/api/users` (200) while a PIN-switched staff member is refused (403); table board serves 9 tables; plus a browser pass confirming owner login, the board rendering, staff PIN sign-in, and Admin hidden from staff.
+- **Left over:** the live database still has open orders from earlier testing (~12 days idle on C1, C2, T2, T3) — cancel them from the board. The seeded owner password is still `owner1234` and is public in the repo; change it before real service.
+
 ### 2026-08-11 — A plain-English pitch, then `overview.html` when the prose still read as prose
 - **Context:** Owner asked for a non-technical description for investors and customers — what it is, what it does, key features, and revenue potential. The first answer was PITCH.md (~2,200 words). "Too long to read for" → a ~220-word summary went on top. Still "its more text. for me it should be interactive and readable easy visually" → the same content rebuilt as a page you operate instead of read.
 - **Decisions:**
