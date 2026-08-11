@@ -14,6 +14,29 @@
  * Passenger provides the port through $PORT; it also accepts a socket path
  * there, which `listen()` handles either way.
  */
+/*
+ * Make WebAssembly bounds-checked before anything can instantiate it.
+ *
+ * Prisma 7's query compiler is WASM, and V8 normally reserves a multi-gigabyte
+ * guard region per Wasm memory so it can use trap handlers instead of explicit
+ * checks. Under CloudLinux LVE, "Max address space" is capped (4 GiB on this
+ * host), so that reservation is refused and the process dies on the first
+ * query with:
+ *   RangeError: WebAssembly.instantiate(): Out of memory
+ *   FATAL ERROR: ... JavaScript heap out of memory
+ * — misleading, because the heap was only ~27 MB. It is address space, not heap.
+ *
+ * Explicit bounds checks need no guard region. Slightly slower Wasm, which is
+ * irrelevant here. This has to run before `next` is required, and cannot go in
+ * NODE_OPTIONS (Node rejects V8 flags there) or on the command line (Passenger
+ * runs a file, not a command).
+ */
+try {
+  require("node:v8").setFlagsFromString("--wasm-enforce-bounds-checks");
+} catch {
+  // Older V8 without the flag: carry on rather than refuse to boot.
+}
+
 const { createServer } = require("http");
 const next = require("next");
 
