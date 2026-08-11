@@ -330,13 +330,20 @@ jobs:
         env:
           ORIGIN: ${{ vars.APP_ORIGIN }}
         run: |
-          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "https://$ORIGIN/package.json" || echo 000)
-          echo "https://$ORIGIN/package.json -> $code"
-          if [ "$code" = "200" ]; then
-            echo "::error::The application root is being served as static files."
-            echo "Anyone can fetch https://$ORIGIN/package.json — and, once you"
-            echo "upload it, https://$ORIGIN/data/app.db, which holds every"
-            echo "password hash, PIN hash and customer phone number."
+          # Probe several files, not one. A single probe passed a run where
+          # server.js was still being served, because only package.json had
+          # been tidied away — a check with a blind spot is worse than none.
+          exposed=""
+          for p in package.json server.js next.config.ts prisma/schema.prisma .npmrc data/app.db; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "https://$ORIGIN/$p" || echo 000)
+            echo "  https://$ORIGIN/$p -> $code"
+            [ "$code" = "200" ] && exposed="$exposed $p"
+          done
+          if [ -n "$exposed" ]; then
+            echo "::error::Publicly downloadable:$exposed"
+            echo "Those are served as static files from a document root."
+            echo "The dangerous one is data/app.db — it holds every password"
+            echo "hash, PIN hash and customer phone number in the business."
             echo ""
             echo "Move the app root out of the document root:"
             echo "  1. Setup Node.js App → Application root: a plain directory"
