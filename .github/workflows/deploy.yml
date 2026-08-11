@@ -203,7 +203,11 @@ jobs:
           mkdir -p vendor
           docker run --rm -v "$PWD/vendor":/out \
             -e VERSION="$version" -e NODE_MAJOR="$NODE_MAJOR" \
-            quay.io/pypa/manylinux2014_x86_64 bash -euo pipefail -c '
+            quay.io/pypa/manylinux2014_x86_64 bash -eo pipefail -c '
+              # No `set -u` here: the devtoolset enable script appends to
+              # MANPATH/INFOPATH without defaulting them, so an unbound-variable
+              # check kills the build before gcc is even on PATH.
+              export MANPATH="" INFOPATH="" PKG_CONFIG_PATH=""
               # devtoolset-10: the stock CentOS 7 gcc is too old for C++17.
               source /opt/rh/devtoolset-10/enable
               url=$(curl -fsSL https://nodejs.org/dist/index.json \
