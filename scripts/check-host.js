@@ -34,6 +34,20 @@ console.log("\nRestroReserve host check\n");
 // 1. Environment
 console.log("Environment");
 ok("node", process.version);
+// Which node binary, not just which version. cPanel's "Run JS script" can run
+// a different Node than the app: the CloudLinux app lives in
+// ~/nodevenv/<app>/<major>/, and a native module built for one ABI will not
+// load in another. A check that passes under the wrong Node proves nothing.
+ok("node binary", process.execPath);
+if (!/nodevenv/.test(process.execPath)) {
+  console.log(
+    "  WARN  not the application virtualenv — this is the panel's default Node.",
+  );
+  console.log(
+    "        Make sure its major matches Setup Node.js App, or the native",
+  );
+  console.log("        module results below do not describe your app.");
+}
 ok("cwd", process.cwd());
 const dataDir = process.env.DATA_DIR
   ? path.resolve(process.env.DATA_DIR)
@@ -54,6 +68,20 @@ if (!/^https:\/\//.test(process.env.APP_URL || "")) {
 
 // 2. The native module. This is the one that silently kills shared hosting.
 console.log("\nDatabase driver");
+// Report the compiled artefact itself. "Could not locate the bindings file"
+// means this is missing or built for another ABI, and knowing whether it
+// exists separates "the compile never ran" from "it ran for a different Node".
+for (const base of [
+  path.join(process.cwd(), "node_modules", "better-sqlite3"),
+  path.join(process.cwd(), "..", "nodevenv"),
+]) {
+  const binding = path.join(base, "build", "Release", "better_sqlite3.node");
+  if (fs.existsSync(binding)) {
+    const s = fs.statSync(binding);
+    ok("binding", `${binding} (${(s.size / 1024).toFixed(0)} KB, built ${s.mtime.toISOString().slice(0, 16)})`);
+  }
+}
+
 let Database;
 try {
   Database = require("better-sqlite3");
@@ -122,7 +150,21 @@ if (!dbPath) {
     }
     db.close();
   } catch (err) {
+    // Print the whole message here, not the first line. "Could not locate the
+    // bindings file" lists every path it tried on the following lines, and
+    // that list is the entire diagnosis.
     bad("cannot read", err.message.split("\n")[0]);
+    for (const line of err.message.split("\n").slice(1)) {
+      if (line.trim()) console.log(`        ${line.trim()}`);
+    }
+    if (/bindings file/.test(err.message)) {
+      console.log(
+        "\n  The JS wrapper loaded but its compiled binary did not. Either the\n" +
+          "  rebuild never produced one, or it was built for a different Node\n" +
+          "  major than the one running now — compare 'node binary' above with\n" +
+          "  the version in Setup Node.js App, then press Run NPM Install.\n",
+      );
+    }
   }
 }
 
