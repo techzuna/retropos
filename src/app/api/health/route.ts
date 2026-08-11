@@ -24,12 +24,32 @@ export const dynamic = "force-dynamic";
  * evident from the outside. Set HEALTH_TOKEN and pass ?token= to get the
  * detail (paths, versions, error messages) needed to actually fix it.
  */
+
+/**
+ * Reduce an error to a fixed vocabulary. Safe to return unauthenticated —
+ * it names the class of fault without quoting paths or host internals — and
+ * it is the difference between "database: fail" and knowing what to fix.
+ */
+function classify(message: string): string {
+  if (/bindings file/i.test(message)) return "native-binding-missing";
+  if (/no file at/i.test(message)) return "database-file-missing";
+  if (/no such table|does not exist/i.test(message)) return "schema-missing";
+  if (/readonly|permission|EACCES/i.test(message)) return "not-readable";
+  if (/unable to open|SQLITE_CANTOPEN|directory does not exist/i.test(message)) return "cannot-open";
+  if (/GLIBC|ERR_DLOPEN/i.test(message)) return "native-abi-mismatch";
+  return "unknown";
+}
+
 export async function GET(request: NextRequest) {
   const detailed =
     Boolean(process.env.HEALTH_TOKEN) &&
     request.nextUrl.searchParams.get("token") === process.env.HEALTH_TOKEN;
 
   const detail: Record<string, unknown> = {};
+  // Coarse, non-identifying fault codes so the endpoint stays useful without
+  // HEALTH_TOKEN — setting an env var needs panel access, which is exactly
+  // what you do not have when the app will not start.
+  const reasons: string[] = [];
   // Named anything but `require`: the bundler rewrites that identifier, and
   // its require.resolve returns a numeric module id rather than a path.
   const nodeRequire = createRequire(import.meta.url);
@@ -42,7 +62,9 @@ export async function GET(request: NextRequest) {
     Database = nodeRequire("better-sqlite3");
     driver = "ok";
   } catch (err) {
-    if (detailed) detail.driverError = err instanceof Error ? err.message.split("\n")[0] : String(err);
+    const msg = err instanceof Error ? err.message : String(err);
+    reasons.push(`driver:${classify(msg)}`);
+    if (detailed) detail.driverError = msg.split("\n")[0];
   }
 
   // Locating the compiled binary is a nice-to-have, and its own failure must
@@ -93,12 +115,17 @@ export async function GET(request: NextRequest) {
       };
       db.close();
       database = row.c > 0 ? "ok" : "fail";
+      if (row.c === 0) reasons.push("database:no-owner-account");
       if (detailed) detail.activeOwners = row.c;
     } catch (err) {
-      if (detailed) detail.databaseError = err instanceof Error ? err.message.split("\n")[0] : String(err);
+      const msg = err instanceof Error ? err.message : String(err);
+      reasons.push(`database:${classify(msg)}`);
+      if (detailed) detail.databaseError = msg.split("\n")[0];
     }
-  } else if (detailed) {
-    detail.databaseError = dbPath ? `no file at ${dbPath}` : "DATABASE_URL is not a file: URL";
+  } else {
+    const msg = dbPath ? `no file at ${dbPath}` : "DATABASE_URL is not a file: URL";
+    reasons.push(`database:${dbPath ? classify(msg) : "database-url-not-a-file"}`);
+    if (detailed) detail.databaseError = msg;
   }
 
   const ok = driver === "ok" && wasm === "ok" && database === "ok";
@@ -109,6 +136,7 @@ export async function GET(request: NextRequest) {
       driver,
       wasm,
       database,
+      ...(reasons.length ? { reasons } : {}),
       ...(detailed ? { detail } : {}),
     },
     { status: ok ? 200 : 503, headers: { "Cache-Control": "no-store" } },
