@@ -246,6 +246,21 @@ jobs:
             console.log("pinned:", Object.entries(deps).map(([k, v]) => `${k}@${v}`).join(" "));
           '
 
+          # Compile better-sqlite3 on the host instead of downloading a
+          # prebuilt. The published prebuilts are linked against glibc 2.29+,
+          # and CloudLinux/CentOS 7 hosts ship 2.17 — the module then installs
+          # "successfully" and fails at load with
+          #   /lib64/libm.so.6: version `GLIBC_2.29' not found
+          #   ERR_DLOPEN_FAILED
+          # which surfaces as every database query throwing. Compiling links
+          # against whatever glibc the host actually has.
+          #
+          # Written here rather than at the repo root so local and CI installs
+          # keep using the fast prebuilds; only the host pays the compile.
+          # If the host has no compiler, Run NPM Install now fails loudly,
+          # which beats a silent load error at request time.
+          printf 'build_from_source=true\n' > release/.npmrc
+
           # Passenger restarts when tmp/restart.txt has a newer mtime than the
           # running process. Uploading files alone does NOT restart the app —
           # without this the deploy succeeds and the old code keeps serving.

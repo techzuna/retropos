@@ -115,7 +115,7 @@ Then TLS (`certbot --nginx -d pos.example.com`), and **firewall port 3000 so onl
 
 Most such hosts fail at least one of these. Test in this order; each is cheap and each is fatal.
 
-1. **`npm install better-sqlite3` succeeds.** No prebuilt binary for the host's Node/libc means it compiles, which needs `python3`, `make` and `g++` — usually absent. Alpine/musl hosts always compile.
+1. **`npm install better-sqlite3` succeeds *and the binary loads*.** Two separate failures. The install can succeed by downloading a prebuilt that the host cannot then load — the published prebuilts link against **glibc 2.29+**, while CloudLinux/CentOS 7 ships 2.17, so every query throws `ERR_DLOPEN_FAILED` with ``/lib64/libm.so.6: version `GLIBC_2.29' not found``. Confirmed on a real cPanel host. The release therefore ships an `.npmrc` containing `build_from_source=true`, which makes the panel's **Run NPM Install** compile against the host's own glibc. That needs `python3`, `make` and `g++` present; if they are absent the install now fails loudly instead of the app failing at request time. Check the host's glibc with `ldd --version` if you have any shell at all — 2.28 or lower means prebuilts will not work.
 2. **Your process is allowed to stay running,** and the host does not spawn multiple workers for it. Passenger's default is several. If you cannot pin it to one, stop here (see [Run exactly one process](#run-exactly-one-process)).
 3. **A directory outside the web root is writable and persists across deploys.** `data/` holds the database, the payment QR and dish photos. If it sits under the web root, the backup JSONs — which contain every password and PIN hash — become downloadable.
 
