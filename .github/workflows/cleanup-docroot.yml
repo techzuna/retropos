@@ -1,0 +1,109 @@
+name: Clean the old document root
+
+# One-off tidy-up after moving the cPanel Application root out of the
+# subdomain's document root. Deploys went there before the move, which left the
+# whole build readable at https://<domain>/package.json and friends.
+#
+# Manual only, and never on a push: this deletes files on a live host.
+on:
+  workflow_dispatch:
+    inputs:
+      remote_path:
+        description: 'FTP path of the OLD document root, e.g. /restroreserve.amoknepal.com/'
+        required: true
+      confirm:
+        description: 'Type DELETE to confirm. The app must already be running from its new Application root.'
+        required: true
+
+concurrency:
+  group: deploy-pos # never run while a deploy is uploading
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    name: Remove the files this repo put there
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check the request
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+          TARGET: ${{ inputs.remote_path }}
+          SERVER: ${{ secrets.FTP_SERVER }}
+          USERNAME: ${{ secrets.FTP_USERNAME }}
+          PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          [ "$CONFIRM" = "DELETE" ] || { echo "::error::Type DELETE to confirm."; exit 1; }
+          for v in SERVER USERNAME PASSWORD; do
+            eval "[ -n \"\$$v\" ]" || { echo "::error::Missing secrets.FTP_$v"; exit 1; }
+          done
+          case "$TARGET" in
+            */) : ;;
+            *) echo "::error::remote_path must end with a slash. Got: $TARGET"; exit 1 ;;
+          esac
+          case "$TARGET" in
+            /home/*) echo "::error::FTP is chrooted to the home; drop the /home/<user> prefix."; exit 1 ;;
+            /) echo "::error::Refusing to operate on the FTP root."; exit 1 ;;
+          esac
+          # Deleting the directory the app now runs from would take the till
+          # offline. This job is for the OLD location only.
+          if [ "$TARGET" = "${{ vars.FTP_REMOTE_PATH }}" ]; then
+            echo "::error::remote_path equals FTP_REMOTE_PATH ($TARGET) — that is where deploys go now."
+            echo "This job removes the OLD document root, not the live application root."
+            exit 1
+          fi
+
+      - name: Install lftp
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq lftp
+
+      # An allow-list of exactly what this repo's deploys created. Never a
+      # wildcard: cPanel owns the .htaccess in a document root, and deleting it
+      # unhooks Passenger and takes the subdomain down. Anything else the
+      # account keeps there — other sites, mail folders — is untouched.
+      - name: Delete only what we put there
+        env:
+          SERVER: ${{ secrets.FTP_SERVER }}
+          USERNAME: ${{ secrets.FTP_USERNAME }}
+          PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          TARGET: ${{ inputs.remote_path }}
+        run: |
+          # data/ first and deliberately: it is the one with the database and
+          # the backup JSONs, which is why this folder had to stop being public.
+          dirs="data .next public prisma scripts tmp node_modules"
+          files="package.json package-lock.json server.js next.config.ts prisma.config.ts .npmrc"
+
+          {
+            echo "set ssl:verify-certificate no"
+            echo "set net:max-retries 3"
+            echo "open -u \"$USERNAME\",\"$PASSWORD\" ftps://$SERVER:21"
+            echo "cd \"$TARGET\""
+            echo "cls -1 || true"
+            for d in $dirs; do echo "glob -a rm -rf \"$d\" || echo \"  (no $d)\""; done
+            for f in $files; do echo "glob -a rm -f \"$f\" || echo \"  (no $f)\""; done
+            echo "echo '--- what remains:'"
+            echo "cls -1"
+            echo "bye"
+          } > /tmp/cleanup.lftp
+
+          lftp -f /tmp/cleanup.lftp
+
+      - name: Confirm it is no longer downloadable
+        if: ${{ vars.APP_ORIGIN != '' }}
+        env:
+          ORIGIN: ${{ vars.APP_ORIGIN }}
+        run: |
+          fail=0
+          for p in package.json server.js data/app.db prisma/schema.prisma; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "https://$ORIGIN/$p" || echo 000)
+            echo "https://$ORIGIN/$p -> $code"
+            [ "$code" = "200" ] && fail=1
+          done
+          if [ "$fail" = "1" ]; then
+            echo "::error::Still downloadable. Check the path you passed, and that"
+            echo "the Application root really has moved."
+            exit 1
+          fi
+          echo "Nothing of ours is served from that domain any more."
+          echo "### Old document root cleaned" >> $GITHUB_STEP_SUMMARY
+          echo "\`${{ inputs.remote_path }}\` — app files removed, cPanel's .htaccess left in place." >> $GITHUB_STEP_SUMMARY
