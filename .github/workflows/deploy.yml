@@ -249,13 +249,16 @@ jobs:
               scripts: {
                 start: "node server.js",
                 check: "node scripts/check-host.js",
-                // Belt to .npmrc's braces. CloudLinux installs into a
-                // virtualenv (~/nodevenv/<app>/<ver>/lib) whose npm does not
-                // run from the application root, so the .npmrc we ship there
-                // is never read and prebuild-install downloads the glibc-2.29
-                // binary again. A postinstall in the manifest npm is actually
-                // installing always runs, and --build-from-source compiles
-                // against the host's own glibc.
+                // Second line of defence behind .npmrc. CloudLinux installs
+                // into a virtualenv (~/nodevenv/<app>/<ver>/lib) whose npm does
+                // not run from the application root, so the .npmrc shipped
+                // there is never read and prebuild-install downloads the
+                // glibc-2.29 binary again. A postinstall in the manifest npm is
+                // actually installing always runs, and --build-from-source
+                // compiles against whatever glibc the host has.
+                // NOTE: no apostrophes anywhere in this block. It lives inside
+                // a single-quoted shell string, and one closes it early — the
+                // failure looks like a JS syntax error, not a quoting bug.
                 postinstall: "npm rebuild better-sqlite3 --build-from-source",
               },
               dependencies: deps,
