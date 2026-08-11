@@ -162,6 +162,9 @@ The fourth is the one that quietly bites: several workers means duplicate schedu
 
 - `next build` is memory-hungry and shared plans cap RAM, so build on your own machine and upload `.next`.
 - `node_modules` must be installed **on the host**, because `better-sqlite3` is a platform-specific binary — your Mac's copy is `Mach-O arm64` and will not load on their Linux. Never upload `node_modules`; use the panel's **Run NPM Install** button.
+- **The build must be a webpack build**, which is why `npm run build` passes `--webpack`. Turbopack resolves native packages through content-hashed *symlinks* it writes into `.next/node_modules` (`better-sqlite3-90e2652d…` → `../../node_modules/better-sqlite3`). FTP cannot carry a symlink, so a Turbopack build uploads "successfully" and then every page 500s with `Cannot find module 'better-sqlite3-<hash>'` — verified by deploying a copy into a clean directory and booting it. The webpack build emits no `.next/node_modules` at all, and is about a third the size (6 MB / ~370 files versus 22 MB / ~860). If you ever build by hand, do not reach for `next build` directly.
+
+**Automated releases.** `.github/workflows/deploy.yml` does all of the below on a push to the `deploy` branch: typecheck, lint, tests, build, assemble the upload tree, and push it over FTPS. It refuses to ship if the release would carry a `data/` directory, an `.env`, a `*.db`, or a compiled `*.node` binary, and it fails the run when a release contains migrations the live database cannot have applied. Configure `FTP_SERVER`/`FTP_USERNAME`/`FTP_PASSWORD` (secrets) and `FTP_REMOTE_PATH`/`NODE_VERSION` (variables) under Settings → Secrets and variables → Actions. The manual steps below remain the reference for the first deploy and for anything the workflow deliberately will not touch — the database and the panel buttons.
 
 **Steps**
 

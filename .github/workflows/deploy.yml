@@ -1,0 +1,328 @@
+name: Deploy POS
+
+# Pushing to `deploy` is itself the intent to deploy, so there is no path
+# filter here — a filter that can swallow a deploy is worse than an occasional
+# redundant one.
+on:
+  push:
+    branches: [deploy]
+  workflow_dispatch:
+    inputs:
+      migrations_already_applied:
+        description: >-
+          Tick ONLY if you have already migrated the live data/app.db by hand.
+          This host cannot run migrations; shipping code that expects a newer
+          schema than the live database breaks the till.
+        type: boolean
+        default: false
+
+# Two deploys writing the same directory interleave and leave a half-updated
+# app. Queue them instead of cancelling — a cancelled upload is exactly the
+# half-written state we are avoiding.
+concurrency:
+  group: deploy-pos
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and upload
+    runs-on: ubuntu-latest
+    # The release is ~23 MB across ~850 files and FTP opens a new data
+    # connection per file. Later runs send only what changed.
+    timeout-minutes: 45
+
+    steps:
+      - name: Get latest code
+        uses: actions/checkout@v4
+        with:
+          # Needed to diff this push against its predecessor for the migration
+          # guard below.
+          fetch-depth: 0
+
+      # Fail here with a readable message rather than deep inside the upload,
+      # where a missing value surfaces as an authentication error.
+      - name: Check deploy configuration
+        env:
+          SERVER: ${{ secrets.FTP_SERVER }}
+          USERNAME: ${{ secrets.FTP_USERNAME }}
+          PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          REMOTE_PATH: ${{ vars.FTP_REMOTE_PATH }}
+        run: |
+          missing=""
+          [ -z "$SERVER" ]      && missing="$missing secrets.FTP_SERVER"
+          [ -z "$USERNAME" ]    && missing="$missing secrets.FTP_USERNAME"
+          [ -z "$PASSWORD" ]    && missing="$missing secrets.FTP_PASSWORD"
+          [ -z "$REMOTE_PATH" ] && missing="$missing vars.FTP_REMOTE_PATH"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing deploy configuration:$missing"
+            echo "Settings → Secrets and variables → Actions."
+            echo "  FTP_SERVER       the host that actually speaks FTP."
+            echo "                   NOT a Cloudflare-proxied name — those pass"
+            echo "                   HTTP/HTTPS only and drop port 21."
+            echo "  FTP_REMOTE_PATH  the cPanel *application root*, e.g."
+            echo "                   /restroreserve/  — NOT public_html."
+            exit 1
+          fi
+          case "$REMOTE_PATH" in
+            */) : ;;
+            *) echo "::error::FTP_REMOTE_PATH must end with a slash. Got: $REMOTE_PATH"; exit 1 ;;
+          esac
+          # An FTP account is normally chrooted to the cPanel home, so FTP's "/"
+          # already *is* /home/<user>. Giving the filesystem path here uploads
+          # into /home/<user>/home/<user>/... — which succeeds, reports success,
+          # and puts the app nowhere Passenger is looking.
+          case "$REMOTE_PATH" in
+            /home/*)
+              echo "::error::FTP_REMOTE_PATH looks like a filesystem path: $REMOTE_PATH"
+              echo "FTP logins are chrooted to the account home, so '/' is already"
+              echo "/home/<user>. Use the path as FTP sees it — e.g."
+              echo "  /restroreserve/   not   /home/you/restroreserve/"
+              exit 1 ;;
+          esac
+          # The backup JSONs under data/ contain every password and PIN hash in
+          # the organization. Under the web root they are downloadable by URL.
+          case "$REMOTE_PATH" in
+            */public_html/*|*/public_html/)
+              echo "::error::FTP_REMOTE_PATH is inside public_html: $REMOTE_PATH"
+              echo "This app keeps its database, uploads and backups in data/."
+              echo "Served from the web root, the backup JSONs — which contain"
+              echo "every password and PIN hash — become downloadable."
+              echo "Use a directory beside public_html and point the cPanel"
+              echo "Node app's Application URL at your subdomain instead."
+              exit 1 ;;
+          esac
+
+      # A release whose schema is ahead of the live database is the one failure
+      # this host cannot absorb: Setup Node.js App gives no shell, so
+      # `prisma migrate deploy` cannot run against data/app.db. Catch it here,
+      # before the upload, rather than as 500s during service.
+      - name: Guard against un-applied migrations
+        if: ${{ !inputs.migrations_already_applied }}
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            echo "::notice::No previous commit to compare against (first push or manual run)."
+            echo "Skipping the migration check — verify by hand that the live"
+            echo "data/app.db already has every migration in prisma/migrations."
+            exit 0
+          fi
+          changed=$(git diff --name-only "$BEFORE" "${{ github.sha }}" -- prisma/migrations || true)
+          if [ -n "$changed" ]; then
+            echo "::error::This release adds or changes migrations:"
+            echo "$changed" | sed 's/^/  /'
+            echo ""
+            echo "cPanel's Node selector has no shell, so the live database"
+            echo "cannot be migrated in place. Do this instead, during a closed"
+            echo "period (DEPLOY.md, 'cPanel-only hosting'):"
+            echo "  1. Owner → Admin → Back up now, and keep that JSON."
+            echo "  2. Download data/app.db from the host by File Manager/FTP."
+            echo "  3. Locally: DATABASE_URL=file:./app.db npx prisma migrate deploy"
+            echo "  4. Upload the migrated app.db back."
+            echo "  5. Re-run this workflow from the Actions tab with"
+            echo "     'migrations_already_applied' ticked."
+            exit 1
+          fi
+          echo "No migration changes in this push — safe to ship."
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          # One source of truth for the Node major, so CI and the cPanel Node
+          # selector cannot drift apart. Set the NODE_VERSION repository
+          # variable to whatever cPanel is configured with. A mismatch shows up
+          # as better-sqlite3 refusing to load: its prebuilt binary is per-ABI.
+          node-version: ${{ vars.NODE_VERSION || 22 }}
+          cache: npm
+
+      # `npm ci` installs the lockfile exactly and fails if the two disagree.
+      # The full tree, deliberately: `next build` needs tailwind, typescript and
+      # the @types packages, all devDependencies. None of them run at request
+      # time (DEPLOY.md, 'Releasing to a shared server').
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check types
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      # Money, tenancy and PIN rules are covered here. A red suite means a bill
+      # that disagrees with a report, so it blocks the deploy.
+      - name: Test
+        run: npm test
+
+      # `npm run build` is `prisma generate && next build`: the generated client
+      # is gitignored, so a fresh clone has nothing to compile against. No
+      # environment variables are needed — every route is force-dynamic, so the
+      # build never opens the database.
+      - name: Build
+        run: npm run build
+
+      # Assemble exactly what the host runs, as an allow-list. An exclude-list
+      # would be one forgotten entry away from uploading a developer's data/
+      # over the live database.
+      - name: Assemble the deployable tree
+        run: |
+          rm -rf release && mkdir -p release
+
+          # The built app. server.js boots Next in production mode and serves
+          # from .next; src/ is NOT needed at runtime (the Prisma client is
+          # bundled into .next/server — verified). cache/ is build scratch.
+          cp -r .next release/.next
+          # cache/ and dev/ are build and dev-server scratch (dev/ reaches
+          # gigabytes on a developer's machine). node_modules/ inside .next is
+          # empty after a build and only fills at boot, when Next materializes
+          # native modules — better-sqlite3 among them — from the real
+          # node_modules. Shipping it would send ~100 MB of the build machine's
+          # binaries to a host that regenerates them anyway.
+          rm -rf release/.next/cache release/.next/dev release/.next/node_modules
+
+          cp -r public release/public
+          cp server.js next.config.ts release/
+
+          # Schema and migrations travel with the release so the live database's
+          # expected shape is visible on the host, and so `prisma migrate deploy`
+          # works the day this moves somewhere with a shell.
+          cp -r prisma release/prisma
+          cp prisma.config.ts release/
+
+          # Ship WITHOUT node_modules and let cPanel's "Run NPM Install" build
+          # it. better-sqlite3 is a compiled binary for one exact platform — the
+          # copy on a developer's Mac is Mach-O arm64 and cannot load on the
+          # host's Linux. It is also ~1,900 small files, which shared-hosting
+          # FTP drops partway through.
+          #
+          # Runtime dependencies are enumerated from the source manifest and
+          # pinned to the versions this build actually compiled against, read
+          # from the installed tree rather than the manifest's ranges. Listing
+          # them by hand would mean a new dependency silently missing from the
+          # host after a green deploy — the app boots and dies on
+          # "Cannot find module".
+          node -e '
+            const fs = require("fs");
+            const src = JSON.parse(fs.readFileSync("package.json", "utf8"));
+            const deps = {};
+            for (const name of Object.keys(src.dependencies || {})) {
+              deps[name] = JSON.parse(
+                fs.readFileSync(`node_modules/${name}/package.json`, "utf8")
+              ).version;
+            }
+            // prisma.config.ts starts with `import "dotenv/config"`, so any
+            // prisma command on the host needs dotenv even though nothing at
+            // request time does.
+            deps.dotenv = JSON.parse(
+              fs.readFileSync("node_modules/dotenv/package.json", "utf8")
+            ).version;
+            if (!deps.next) throw new Error("next is not a dependency — refusing to ship");
+            if (!deps["better-sqlite3"]) throw new Error("better-sqlite3 missing — refusing to ship");
+            fs.writeFileSync("release/package.json", JSON.stringify({
+              name: "restroreserve",
+              version: src.version,
+              private: true,
+              engines: src.engines,
+              scripts: { start: "node server.js" },
+              dependencies: deps,
+            }, null, 2) + "\n");
+            console.log("pinned:", Object.entries(deps).map(([k, v]) => `${k}@${v}`).join(" "));
+          '
+
+          # Passenger restarts when tmp/restart.txt has a newer mtime than the
+          # running process. Uploading files alone does NOT restart the app —
+          # without this the deploy succeeds and the old code keeps serving.
+          mkdir -p release/tmp
+          echo "restarted by ${{ github.sha }} at $(date -u +%FT%TZ)" > release/tmp/restart.txt
+
+      # Two ways to destroy a restaurant's data, both cheap to rule out.
+      - name: Refuse to ship anything that could overwrite live data
+        run: |
+          if [ -e release/data ]; then
+            echo "::error::release/data exists — that would overwrite the live"
+            echo "database, the payment QR and every backup on the host."
+            exit 1
+          fi
+          if find release \( -name ".env*" -o -name "*.db" \) | grep -q .; then
+            echo "::error::release contains an .env or a database file:"
+            find release \( -name ".env*" -o -name "*.db" \) | sed 's/^/  /'
+            exit 1
+          fi
+          # A .node here means a platform-specific binary from the build machine
+          # slipped in; on the host it fails to load at require time.
+          if find release -name "*.node" | grep -q .; then
+            echo "::error::release contains compiled binaries — the host builds"
+            echo "its own via Run NPM Install:"
+            find release -name "*.node" | sed 's/^/  /'
+            exit 1
+          fi
+          echo "Uploading $(du -sh release | cut -f1) across $(find release -type f | wc -l) files"
+
+      # FTPS on 21, because cPanel offers FTP rather than SSH. The action keeps
+      # a sync-state file on the server and uploads only what changed, so the
+      # first deploy is slow and later ones are not.
+      - name: Upload over FTPS
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps # explicit FTPS — AUTH TLS on the normal port
+          port: 21
+          local-dir: ./release/
+          server-dir: ${{ vars.FTP_REMOTE_PATH }}
+          # Never wipe the remote first. That directory also holds data/ (the
+          # live database, the payment QR, the backups), node_modules installed
+          # by the panel, and the Node selector's own .htaccess. A clean slate
+          # deletes the restaurant's records.
+          dangerous-clean-slate: false
+          # Belt and braces — none of these are built into the release tree.
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            **/data/**
+            **/.env*
+
+      - name: What to check
+        run: |
+          {
+            echo "### Deployed"
+            echo "Commit \`${{ github.sha }}\` → \`${{ vars.FTP_REMOTE_PATH }}\`"
+            echo ""
+            echo "Passenger restarts on the new \`tmp/restart.txt\`. If the site still"
+            echo "serves the old build, press **Restart** in cPanel → Setup Node.js App."
+            echo ""
+            echo "**After a dependency change, press _Run NPM Install_ in cPanel.**"
+            echo "\`node_modules\` is installed on the server, not uploaded —"
+            echo "\`better-sqlite3\` is a compiled binary that must match the host's"
+            echo "platform and Node ABI. If that step errors, this host cannot run"
+            echo "the app (DEPLOY.md, 'cPanel-only hosting')."
+            echo ""
+            echo "#### Smoke test the public URL"
+            echo "1. Sign in as owner — a failure here usually means \`DATABASE_URL\`"
+            echo "   points somewhere unwritable, or \`data/app.db\` was never uploaded."
+            echo "2. End shift, then sign a staff member back in with their PIN."
+            echo "3. Seat a table, add an item, settle it, print the bill, confirm"
+            echo "   the table frees itself."
+            echo "4. Owner → Admin → Back up now, and check the timestamp moves."
+            echo ""
+            echo "#### One-time cPanel setup"
+            echo "Application root \`${{ vars.FTP_REMOTE_PATH }}\`, startup file"
+            echo "\`server.js\`, Node ${{ vars.NODE_VERSION || 22 }}.x — the same major as this build,"
+            echo "or better-sqlite3's prebuilt binary will not load."
+            echo ""
+            echo "Environment variables (panel, not files — \`.env\` is never uploaded):"
+            echo '```ini'
+            echo "NODE_ENV=production"
+            echo "DATABASE_URL=file:/home/USER/APPROOT/data/app.db   # absolute"
+            echo "SESSION_SECRET=<openssl rand -base64 32>"
+            echo "APP_URL=https://pos.example.com                    # https, or the cookie isn't Secure"
+            echo "TRUSTED_PROXY=1                                    # LiteSpeed/Apache sits in front"
+            echo '```'
+            echo ""
+            echo "#### Migrations in this release"
+            echo '```'
+            ls prisma/migrations | grep -v migration_lock || echo "(none)"
+            echo '```'
+            echo "The live \`data/app.db\` must already have all of these."
+          } >> $GITHUB_STEP_SUMMARY

@@ -7,9 +7,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "//build:1": "src/generated/prisma is gitignored, so a fresh clone has no client: generate before building or the build dies on `Module not found: @/generated/prisma/client`.",
+    "//build:2": "--webpack, deliberately. Turbopack resolves native packages through content-hashed SYMLINKS in .next/node_modules (better-sqlite3-<hash> -> ../../node_modules/better-sqlite3). Those cannot survive an FTP upload, and a build that boots here dies on the host with `Cannot find module 'better-sqlite3-<hash>'`. The webpack build emits no .next/node_modules at all, so the release is portable — and a third the size. `next dev` still uses Turbopack.",
+    "build": "prisma generate && next build --webpack",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "migrate": "prisma migrate deploy",
