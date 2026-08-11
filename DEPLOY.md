@@ -282,6 +282,20 @@ Migrations are forward-only, so code rolls back but the schema does not. If the 
 | `SESSION_SECRET` | Signs session cookies — generate with `openssl rand -base64 32`; changing it logs every device out | `.env` on the server |
 | `APP_URL` | The URL staff devices use (for absolute links on bills) | `.env` on the server |
 | `TRUSTED_PROXY` | Set to `1` **only** if a reverse proxy in front of the app sets `x-forwarded-for`. Unset (the default, bare `npm run start`) means the header is ignored for rate limiting, because a client could otherwise rotate it to dodge throttling. | `.env` on the server |
+| `DATA_DIR` | Absolute path holding the database directory, `uploads/` and `backups/`. Defaults to `data/` beside the app. **Set it whenever the app root is inside a web-served directory** — see below. | `.env`, or the cPanel panel |
+
+### If the app root is web-served, move `DATA_DIR` — not just `DATABASE_URL`
+
+Shared cPanel plans name a subdomain's document root after the domain (`/home/USER/pos.example.com/`), and anything under one is served as a static file by Apache before Passenger sees the request. Deploying there means `https://pos.example.com/package.json` answers 200 — and once the app writes data, `https://pos.example.com/data/backups/<org>_<date>.json` does too. That file is a whole-organization dump: every password hash, every PIN hash, every customer name and phone number.
+
+Pointing `DATABASE_URL` somewhere private is **not sufficient**. Uploads and backups resolve from `DATA_DIR` (`src/lib/paths.ts`), not from the database URL, so they stay in the public folder unless you move them too. Set both, outside every document root:
+
+```ini
+DATA_DIR=/home/USER/restroreserve-data
+DATABASE_URL=file:/home/USER/restroreserve-data/app.db
+```
+
+Better still, put the *application root* itself outside the document root — a plain `restroreserve/` directory, with the Node app's Application URL pointing at the subdomain. Passenger routes the subdomain to the app, and nothing under the app root is ever served statically. Verify either way by fetching `https://<your-domain>/package.json`: a 404 means private, a 200 means still exposed. The deploy workflow performs exactly that check after every upload when the `APP_ORIGIN` variable is set.
 
 Never commit `.env` (gitignored). There are no third-party API keys in this system.
 

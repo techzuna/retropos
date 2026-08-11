@@ -2,6 +2,7 @@ import { mkdir, readFile, readdir, stat, unlink, writeFile } from "node:fs/promi
 import path from "node:path";
 import { resolveDb, type Db, type OrgContext } from "./db";
 import { PosError } from "./errors";
+import { backupDir } from "./paths";
 
 // v2 added `reservations`; v3 the extras catalogue and its links; v4 service
 // periods. Older files still restore — they simply predate those features, so
@@ -10,9 +11,7 @@ import { PosError } from "./errors";
 const BACKUP_VERSION = 4;
 const RESTORABLE_VERSIONS = [1, 2, 3, 4];
 
-export function backupDir(): string {
-  return path.join(process.cwd(), "data", "backups");
-}
+export { backupDir };
 
 export interface OrgBackup {
   version: number;

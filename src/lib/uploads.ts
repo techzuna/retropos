@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { PosError } from "./errors";
+import { uploadsDir } from "./paths";
 import type { SessionContext } from "./session";
 
 const MAX_QR_BYTES = 2 * 1024 * 1024;
@@ -10,10 +11,6 @@ const EXT_BY_MIME: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/webp": "webp",
 };
-
-function uploadsDir(): string {
-  return path.join(process.cwd(), "data", "uploads");
-}
 
 /** Reverse the extension map for serving; defaults to PNG for an odd file. */
 function contentTypeOf(filename: string): string {
