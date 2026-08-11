@@ -44,3 +44,6 @@ next-env.d.ts
 
 # local database, uploads, backups
 data/
+
+# CI-built native binaries for old-glibc hosts
+/vendor/

@@ -37,6 +37,12 @@ try {
   // Older V8 without the flag: carry on rather than refuse to boot.
 }
 
+// Repair the native database driver before Next loads anything that uses it.
+// On hosts that can neither run our prebuilt (old glibc) nor compile their own
+// (no toolchain), this is what makes the app work at all — and it runs on every
+// boot, so a deploy fixes it without anyone touching the hosting panel.
+require("./scripts/install-native").installBetterSqlite3();
+
 const { createServer } = require("http");
 const next = require("next");
 

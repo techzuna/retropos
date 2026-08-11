@@ -178,6 +178,55 @@ jobs:
       - name: Build
         run: npm run build
 
+      # Compile better-sqlite3 against an ancient glibc so it loads on hosts
+      # that can neither use the published prebuilts (linked against 2.29+,
+      # while CentOS/CloudLinux 7 ships 2.17) nor compile their own for want of
+      # python3/make/g++. manylinux2014 IS CentOS 7, which is the point: a
+      # binary built there runs on anything newer.
+      #
+      # Cached on the package version and Node major, so this costs minutes
+      # only when one of those changes.
+      - name: Cache the old-glibc native binary
+        id: native-cache
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: bsql3-${{ hashFiles('package-lock.json') }}-node${{ vars.NODE_VERSION || 22 }}
+
+      - name: Compile better-sqlite3 for old glibc
+        if: steps.native-cache.outputs.cache-hit != 'true'
+        env:
+          NODE_MAJOR: ${{ vars.NODE_VERSION || 22 }}
+        run: |
+          version=$(node -p "require('./node_modules/better-sqlite3/package.json').version")
+          echo "building better-sqlite3@$version for Node ${NODE_MAJOR}.x"
+          mkdir -p vendor
+          docker run --rm -v "$PWD/vendor":/out \
+            -e VERSION="$version" -e NODE_MAJOR="$NODE_MAJOR" \
+            quay.io/pypa/manylinux2014_x86_64 bash -euo pipefail -c '
+              # devtoolset-10: the stock CentOS 7 gcc is too old for C++17.
+              source /opt/rh/devtoolset-10/enable
+              url=$(curl -fsSL https://nodejs.org/dist/index.json \
+                | grep -o "\"version\":\"v'"$NODE_MAJOR"'\.[0-9.]*\"" | head -1 \
+                | sed "s/.*v/https:\/\/nodejs.org\/dist\/v/;s/\"//" )
+              ver=$(basename "$url")
+              curl -fsSL "https://nodejs.org/dist/$ver/node-$ver-linux-x64.tar.xz" | tar -xJ -C /opt
+              export PATH="/opt/node-$ver-linux-x64/bin:$PATH"
+              abi=$(node -p "process.versions.modules")
+              echo "node $(node -v), ABI $abi, glibc $(ldd --version | head -1)"
+              mkdir -p /build && cd /build && npm init -y >/dev/null
+              npm install "better-sqlite3@$VERSION" --build-from-source \
+                --no-audit --no-fund --loglevel=error
+              cp node_modules/better-sqlite3/build/Release/better_sqlite3.node \
+                 "/out/better_sqlite3-abi${abi}-linux-x64.node"
+            '
+          ls -la vendor/
+          # Prove it targets an old glibc — otherwise we would ship the same
+          # unloadable binary the host already rejected.
+          for f in vendor/*.node; do
+            echo "$f needs: $(objdump -T "$f" 2>/dev/null | grep -o 'GLIBC_[0-9.]*' | sort -Vu | tail -1)"
+          done
+
       # Assemble exactly what the host runs, as an allow-list. An exclude-list
       # would be one forgotten entry away from uploading a developer's data/
       # over the live database.
@@ -210,7 +259,15 @@ jobs:
           # "Run JS script" button executes an npm script, and this is the only
           # way to see why the app is failing without reading stderr.log by eye.
           mkdir -p release/scripts
-          cp scripts/check-host.js release/scripts/
+          cp scripts/check-host.js scripts/install-native.js release/scripts/
+
+          # The old-glibc driver, put in place by server.js at boot.
+          if ls vendor/*.node >/dev/null 2>&1; then
+            mkdir -p release/vendor && cp vendor/*.node release/vendor/
+          else
+            echo "::error::no vendored native binary was produced"
+            exit 1
+          fi
 
           # Ship WITHOUT node_modules and let cPanel's "Run NPM Install" build
           # it. better-sqlite3 is a compiled binary for one exact platform — the
@@ -249,17 +306,15 @@ jobs:
               scripts: {
                 start: "node server.js",
                 check: "node scripts/check-host.js",
-                // Second line of defence behind .npmrc. CloudLinux installs
-                // into a virtualenv (~/nodevenv/<app>/<ver>/lib) whose npm does
-                // not run from the application root, so the .npmrc shipped
-                // there is never read and prebuild-install downloads the
-                // glibc-2.29 binary again. A postinstall in the manifest npm is
-                // actually installing always runs, and --build-from-source
-                // compiles against whatever glibc the host has.
                 // NOTE: no apostrophes anywhere in this block. It lives inside
                 // a single-quoted shell string, and one closes it early — the
                 // failure looks like a JS syntax error, not a quoting bug.
-                postinstall: "npm rebuild better-sqlite3 --build-from-source",
+                //
+                // There is deliberately NO postinstall rebuild here. Forcing
+                // --build-from-source on a host with no compiler makes the whole
+                // npm install fail and leaves no binary at all, which is exactly
+                // the state this deployment got stuck in. server.js installs a
+                // vendored binary at boot instead.
               },
               dependencies: deps,
             }, null, 2) + "\n");
@@ -279,7 +334,9 @@ jobs:
           # keep using the fast prebuilds; only the host pays the compile.
           # If the host has no compiler, Run NPM Install now fails loudly,
           # which beats a silent load error at request time.
-          printf 'build_from_source=true\n' > release/.npmrc
+          # No .npmrc forcing a source build: on a host with no compiler that
+          # turns a working install into a failed one. The vendored binary in
+          # vendor/, installed by server.js at boot, is the mechanism now.
 
           # Passenger restarts when tmp/restart.txt has a newer mtime than the
           # running process. Uploading files alone does NOT restart the app —
@@ -300,12 +357,13 @@ jobs:
             find release \( -name ".env*" -o -name "*.db" \) | sed 's/^/  /'
             exit 1
           fi
-          # A .node here means a platform-specific binary from the build machine
-          # slipped in; on the host it fails to load at require time.
-          if find release -name "*.node" | grep -q .; then
-            echo "::error::release contains compiled binaries — the host builds"
-            echo "its own via Run NPM Install:"
-            find release -name "*.node" | sed 's/^/  /'
+          # vendor/ holds the old-glibc driver we build deliberately. A .node
+          # anywhere else means a binary from the build machine leaked in, and
+          # those fail to load on the host.
+          stray=$(find release -name "*.node" -not -path "release/vendor/*")
+          if [ -n "$stray" ]; then
+            echo "::error::compiled binaries outside vendor/:"
+            echo "$stray" | sed 's/^/  /'
             exit 1
           fi
           echo "Uploading $(du -sh release | cut -f1) across $(find release -type f | wc -l) files"

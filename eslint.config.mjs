@@ -21,7 +21,7 @@ const eslintConfig = defineConfig([
     // the compatible choice rather than a style lapse. `check-host.js` also has
     // to keep working when the app itself cannot boot, which rules out
     // importing anything from src/. Everything else still applies to them.
-    files: ["server.js", "scripts/check-host.js"],
+    files: ["server.js", "scripts/check-host.js", "scripts/install-native.js"],
     rules: { "@typescript-eslint/no-require-imports": "off" },
   },
 ]);
