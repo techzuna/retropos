@@ -206,6 +206,12 @@ jobs:
           cp -r prisma release/prisma
           cp prisma.config.ts release/
 
+          # Preflight the panel can actually run. On a plan with no shell, the
+          # "Run JS script" button executes an npm script, and this is the only
+          # way to see why the app is failing without reading stderr.log by eye.
+          mkdir -p release/scripts
+          cp scripts/check-host.js release/scripts/
+
           # Ship WITHOUT node_modules and let cPanel's "Run NPM Install" build
           # it. better-sqlite3 is a compiled binary for one exact platform — the
           # copy on a developer's Mac is Mach-O arm64 and cannot load on the
@@ -240,7 +246,7 @@ jobs:
               version: src.version,
               private: true,
               engines: src.engines,
-              scripts: { start: "node server.js" },
+              scripts: { start: "node server.js", check: "node scripts/check-host.js" },
               dependencies: deps,
             }, null, 2) + "\n");
             console.log("pinned:", Object.entries(deps).map(([k, v]) => `${k}@${v}`).join(" "));
