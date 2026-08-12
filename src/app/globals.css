@@ -81,6 +81,21 @@ body {
     transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
   }
 
+  /* Every call site that set `disabled` without its own opacity class looked
+     completely normal while being dead to touch — the exact "looks broken
+     rather than busy" failure this app cannot afford mid-service. */
+  .btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  /* A busy cue that survives prefers-reduced-motion, where the spinner cannot
+     move. Works on any control, not just .btn. */
+  [data-busy] {
+    cursor: wait;
+    box-shadow: inset 0 0 0 2px var(--brass);
+  }
+
   .btn-primary {
     background: var(--madder);
     color: var(--paper);
@@ -137,5 +152,24 @@ body {
   *::after {
     animation: none !important;
     transition: none !important;
+  }
+
+  /* A spinner is not decoration — on this app it is the only sign that a
+     1.4s write is running. Blanket `animation: none` turned every one into a
+     static ring, so a tablet with Reduce Motion on showed a frozen app.
+     Fade in place instead of spinning: it satisfies the request (no movement)
+     while still saying "working". */
+  .animate-spin {
+    animation: busy-pulse 1.6s ease-in-out infinite !important;
+  }
+}
+
+@keyframes busy-pulse {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
   }
 }

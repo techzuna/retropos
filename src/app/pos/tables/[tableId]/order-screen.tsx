@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatPrice } from "@/lib/format";
@@ -86,6 +86,9 @@ export function OrderScreen({
   const [cancelling, setCancelling] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Quantities the waiter has tapped but that are not written yet.
+  const [pendingQty, setPendingQty] = useState<Record<string, number>>({});
+  const qtyTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   // Per-card composition, kept client-side until "Add to order". Nothing here
   // is trusted for money: the server re-reads every price at add-time.
@@ -104,7 +107,10 @@ export function OrderScreen({
     setDrafts((d) => ({ ...d, [id]: { ...draftFor(id), ...patch } }));
 
   const orderId = initialOrder.id;
-  const totalCents = items.reduce((sum, it) => sum + lineTotal(it), 0);
+  const totalCents = items.reduce(
+    (sum, it) => sum + lineTotal({ ...it, quantity: pendingQty[it.id] ?? it.quantity }),
+    0,
+  );
 
   const categories = [{ id: ALL, name: "All" }, ...menu.map((c) => ({ id: c.id, name: c.name }))];
   const visible =
@@ -143,8 +149,8 @@ export function OrderScreen({
     return () => clearInterval(timer);
   }, [busy, orderId]);
 
-  async function mutate(fn: () => Promise<Response | null>) {
-    if (busy) return;
+  async function mutate(fn: () => Promise<Response | null>): Promise<boolean> {
+    if (busy) return false;
     setBusy(true);
     setError(null);
     const res = await fn().catch(() => null);
@@ -153,17 +159,22 @@ export function OrderScreen({
     if (!res?.ok) setError(await failureMessage(res));
     await refetch();
     setBusy(false);
+    return Boolean(res?.ok);
   }
 
   async function addToOrder(item: MenuItem) {
     const { qty, extras } = draftFor(item.id);
-    await mutate(() =>
+    const ok = await mutate(() =>
       fetch(`/api/orders/${orderId}/items`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ menuItemId: item.id, quantity: qty, modifierIds: extras }),
       }),
     );
+    // Only on success. Clearing regardless made a rejected add — a sold-out
+    // item, a dropped connection — look pixel-identical to a successful one,
+    // with the waiter's quantity and extras silently discarded.
+    if (!ok) return;
     // Reset and fold the row back up: the composition is on the order now, and
     // the next guest's version starts clean.
     setDrafts((d) => ({ ...d, [item.id]: { qty: 1, extras: [] } }));
@@ -174,19 +185,61 @@ export function OrderScreen({
     });
   }
 
+  /**
+   * Quantity is owned locally while a waiter is tapping, then written once.
+   *
+   * It used to send `line.quantity + delta` straight from server state on
+   * every tap, guarded by a single `busy` flag. On a host where each write
+   * takes ~1.4s that silently lost taps: four quick presses of + from 1 landed
+   * on 2, because taps two to four hit `if (busy) return` and vanished, and
+   * each read the same stale quantity anyway. The bill was then simply wrong,
+   * with nothing on screen admitting it.
+   *
+   * Now the number moves the instant it is tapped and one PATCH follows the
+   * flurry, so the total on screen is what gets written.
+   */
+  function clearPending(lineId: string) {
+    setPendingQty((p) => {
+      const next = { ...p };
+      delete next[lineId];
+      return next;
+    });
+  }
+
+  function displayedQuantity(line: Line): number {
+    return pendingQty[line.id] ?? line.quantity;
+  }
+
   function changeQuantity(line: Line, delta: number) {
-    const next = line.quantity + delta;
+    const next = displayedQuantity(line) + delta;
+
     if (next < 1) {
+      // Removing is a different act from decrementing — send it immediately
+      // rather than debouncing a disappearance.
+      clearTimeout(qtyTimers.current[line.id]);
+      delete qtyTimers.current[line.id];
+      clearPending(line.id);
       void mutate(() => fetch(`/api/orders/${orderId}/items/${line.id}`, { method: "DELETE" }));
-    } else {
-      void mutate(() =>
-        fetch(`/api/orders/${orderId}/items/${line.id}`, {
+      return;
+    }
+
+    setPendingQty((p) => ({ ...p, [line.id]: next }));
+    clearTimeout(qtyTimers.current[line.id]);
+    qtyTimers.current[line.id] = setTimeout(() => {
+      delete qtyTimers.current[line.id];
+      void (async () => {
+        const res = await fetch(`/api/orders/${orderId}/items/${line.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ quantity: next }),
-        }),
-      );
-    }
+        }).catch(() => null);
+        if (!res?.ok) setError(await failureMessage(res));
+        await refetch();
+        // Drop the optimistic value only after the refetch, or the number
+        // flicks back to the old server figure for a frame.
+        clearPending(line.id);
+      })();
+    }, 450);
   }
 
   async function editNote(line: Line) {
@@ -307,7 +360,7 @@ export function OrderScreen({
                   >
                     −
                   </button>
-                  <span className="w-8 text-center font-mono">{line.quantity}</span>
+                  <span className="w-8 text-center font-mono">{displayedQuantity(line)}</span>
                   <button
                     type="button"
                     aria-label={`More ${line.name}`}
