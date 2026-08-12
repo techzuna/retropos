@@ -125,7 +125,12 @@ jobs:
             echo "data/app.db already has every migration in apps/outlet/prisma/migrations."
             exit 0
           fi
-          changed=$(git diff --name-only "$BEFORE" "${{ github.sha }}" -- apps/outlet/prisma/migrations || true)
+          # -M detects renames, and pure renames (R100) are filtered out: moving
+          # the app into apps/outlet re-pathed every migration file and tripped
+          # this guard even though no schema changed. Only content that was
+          # added, modified or deleted counts.
+          changed=$(git diff -M --name-status "$BEFORE" "${{ github.sha }}" \
+            -- '*prisma/migrations/*' | grep -vE '^R100' | cut -f2- || true)
           if [ -n "$changed" ]; then
             echo "::error::This release adds or changes migrations:"
             echo "$changed" | sed 's/^/  /'
