@@ -6,7 +6,14 @@
 
 RestroReserve is a staff-operated point-of-sale web app for restaurants, built mobile/tablet-first. Staff seat a customer at a table, take the order from the outlet's menu, adjust it freely until payment, then settle it — showing the outlet's payment QR (uploaded by the manager) or taking cash — print the bill, and the table frees itself. Staff also take table bookings for a time window or a whole day, and seat those parties in one tap when they arrive. Managers additionally maintain the floor plan and menu and read sales reports; owners administer outlets, users, settings, and backups.
 
-The system is multi-tenant: one owner (organization) can run multiple restaurant outlets, each with its own menu, tables, staff, and settings. It runs on a local server with a local database, and the owner configures automatic JSON backups (daily/weekly) that can restore the data at any time.
+The system is multi-tenant: one owner (organization) can run multiple restaurant outlets, each with its own menu, tables, staff, and settings.
+
+It ships as **two builds of one codebase**, and the features are the same in both:
+
+- **Onsite** (`apps/onsite`) — self-hosted on a machine in the restaurant. SQLite, one process, automatic JSON backups the owner schedules. Service continues when the internet does not. This is what is live today.
+- **Cloud** (`apps/cloud`) — the hosted service. Postgres, many restaurants on one deployment, each on a monthly subscription, with its own logo and brand colour. Under construction.
+
+Feature code lives in `packages/`, so a rule about money, roles or time is written once and both builds obey it. Only the parts that genuinely differ — the database driver, where files are stored, how the process is supervised — belong to an app.
 
 ## 2. Problem Statement
 

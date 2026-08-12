@@ -1,90 +1,169 @@
 # RestroReserve — Deployment
 
-> Rewritten 2026-07-28 for the POS pivot: RestroReserve is **self-hosted and local-first**. The old Vercel/Neon instructions are in git history.
+Two products come out of this repository, and they are deployed differently.
 
-## Target Platform
+**`apps/onsite`** is the self-hosted build: SQLite in a single file, one long-lived Node process, running on a machine the restaurant controls. Its whole point is that service continues when the internet does not. This is what is live today.
 
-A machine the restaurant controls, running a single long-lived Node process:
+**`apps/cloud`** is the hosted multi-tenant service: Postgres, many restaurants, subscription. It talks to its database over the network through the pure-JavaScript `pg` driver, so it has none of the native-module trouble the onsite build has to survive, and it deploys anywhere that runs Node. It currently boots and answers `/api/health`; signup and the POS screens are still to come.
 
-- **Typical:** a mini-PC/NUC or spare laptop in the outlet, on the same Wi-Fi as the staff tablets/phones.
-- **Alternative:** a VPS shared by several outlets, or shared with the restaurant's other sites — see [Shared server](#shared-server) below.
+Feature code lives in `packages/`, so a fix reaches both. Only the parts that genuinely differ — the database driver, where files are stored, how the process is supervised — live in the apps.
 
-The long-running process matters: the in-process backup scheduler (`instrumentation.ts`) only runs while the app runs. Do not deploy to serverless platforms without replacing the scheduler.
+Four situations follow, in the order you are likely to meet them: your own machine, a customer's box, shared hosting, and a VPS.
 
-## What any server must provide
+---
 
-These are hard requirements, not preferences. Check them before choosing a host.
+## Running both locally
 
-| Requirement | Why | What breaks otherwise |
-|---|---|---|
-| **Node 20 minimum, 22 LTS preferred** | `engines` in package.json; `better-sqlite3` prebuilds are per-ABI | Native module fails to load, cryptically. Node 20 is verified working, but a transitive Prisma package declares `>=22`, so `npm ci` warns on 20 |
-| **A long-lived process** (`next start`) | The backup scheduler lives in it | Backups silently stop; the app 502s on idle-kill hosts |
-| **Exactly one process** | See below — this is the one people get wrong | Duplicate backups, broken rate limiting, SQLite write contention |
-| **A native module can install** | `better-sqlite3` runs `prebuild-install \|\| node-gyp rebuild` | Needs a matching prebuilt binary, or `python3` + `make` + `g++` |
-| **A writable, persistent `data/`** | `app.db`, `uploads/`, `backups/` | Data lost on redeploy; uploads 500 |
-| **A port you can bind** | `next start` honours `$PORT` | — |
-
-### Run exactly one process
-
-No PM2 cluster mode, no Passenger multi-worker, no two containers behind a load balancer. Three separate reasons, all in the current design:
-
-1. **The rate limiter is in-memory** (`src/lib/rate-limit.ts`). Two processes means two independent PIN-attempt counters, so the brute-force limit is effectively doubled per extra worker.
-2. **The backup scheduler is in-process** (`instrumentation.ts`). Two processes means two schedulers writing backups on the same schedule.
-3. **SQLite has one writer.** The `better-sqlite3` adapter sets a 5-second busy timeout, so concurrent readers wait rather than fail — but the database is in rollback-journal mode, so writes still block readers for the duration of the write.
-
-If you ever need more than one process, all three have to be solved first: shared rate-limit state (Redis or sticky routing), one designated scheduler, and `journal_mode=WAL`. That is the same list as the hosted design in DESIGN.md.
-
-## Shared server
-
-"Shared server" means three different things, and only two of them work.
-
-| What you mean | Verdict |
-|---|---|
-| A VPS shared by **several outlets of this organization** | Works, and is already supported — one app, one database, outlets separated by the tenancy scoping in `src/lib/` |
-| A VPS shared with the restaurant's **other sites** | Works — put RestroReserve on its own subdomain behind the existing reverse proxy |
-| **cPanel-style shared hosting** | Usually fails — see the checks below |
-
-Before either of the working options, be clear about the trade: the app was built local-first so that service continues when the internet does not. On a remote server, an internet or host outage stops the till. That is a business decision (see DESIGN.md, "Proposed: Hosted Multi-Tenant Platform"), not a technical detail.
-
-### First release: VPS behind a reverse proxy
+One install covers every workspace. Run everything from the repository root.
 
 ```bash
-# 1. As a non-root user
-git clone <repo-url> restroreserve && cd restroreserve
-npm ci
-cp .env.example .env
+npm install
 ```
 
-Edit `.env` — two settings differ from the LAN setup and both matter:
-
-```ini
-DATABASE_URL="file:/srv/restroreserve-data/app.db"   # OUTSIDE the deploy tree
-SESSION_SECRET="…"                                    # openssl rand -base64 32
-APP_URL="https://pos.example.com"                     # https, or the cookie won't be Secure
-TRUSTED_PROXY=1                                       # only because a proxy is in front
-```
-
-- **`APP_URL` must start with `https://`.** The session cookie's `Secure` flag is derived from it (`src/lib/session.ts`). Leave it `http://` on an internet-facing host and the session cookie travels unprotected.
-- **`TRUSTED_PROXY=1` only when a proxy really is in front.** With a proxy, every request otherwise looks like it came from the proxy's IP, collapsing per-client rate limits into one bucket. Without a proxy, setting it lets a client forge `x-forwarded-for` and dodge throttling entirely.
-- **Keep `data/` outside the deploy tree** if your deploy replaces the directory. An absolute `DATABASE_URL` plus a symlinked `data/` is the simplest arrangement; otherwise a `git pull`-style deploy is fine as-is.
+The two apps run side by side on different ports against different databases, which is the point: a change in `packages/` should show up in both without touching either app.
 
 ```bash
-# 2. Migrate, seed, then build
-npx prisma migrate deploy
-npx prisma db seed        # first deploy only — or restore a backup instead
-npm run build
+npm run onsite -- dev -- -p 3111    # http://localhost:3111
+npm run cloud  -- dev -- -p 3222    # http://localhost:3222
 ```
 
+**Onsite needs nothing else.** SQLite is a file, created for you at `apps/onsite/data/app.db`. Sign in with the seeded owner (see `CREDENTIALS.md`).
+
+**Cloud needs a Postgres to talk to.** Once:
+
+```bash
+createdb restroreserve_cloud
+cp apps/cloud/.env.example apps/cloud/.env     # set DATABASE_URL and SESSION_SECRET
+cd apps/cloud && npx prisma migrate deploy
+```
+
+Each app keeps its own `.env` beside it — `apps/onsite/.env`, `apps/cloud/.env`. Next loads the file from the app's own directory, so a `.env` at the repository root is read by nothing. That is a real trap: the dev server starts happily and every database call fails.
+
+### Is it actually working?
+
+Both apps answer a health endpoint without a login, because the question that matters most is usually asked when nobody can log in.
+
+```bash
+curl -s localhost:3111/api/health
+{"ok":true,"node":"v20","driver":"ok","wasm":"ok","database":"ok"}
+
+curl -s localhost:3222/api/health
+{"ok":true,"node":"v20","database":"ok","organizations":0}
+```
+
+For onsite, `driver` is whether the compiled SQLite binding loaded, `wasm` is whether Prisma's WebAssembly query compiler could allocate, and `database` is whether the file opened and has an owner account. A failure adds a `reasons` array with a coarse code — `database-file-missing`, `native-binding-missing`, `schema-missing` — which is enough to know what to fix without exposing anything to a stranger. Cloud has no native driver and no Wasm constraint, so it only reports the database.
+
+### Before you push
+
+```bash
+npm test          # every workspace
+npm run lint
+npm run typecheck
+npm run db:check  # both schemas still match packages/db/models.prisma
+npm run build     # production build of both apps
+```
+
+### Changing the data model
+
+Edit **`packages/db/models.prisma`** — never an app's `schema.prisma`, which is generated and will be overwritten.
+
+```bash
+npm run db:compose                                        # rewrite both app schemas
+cd apps/onsite && npx prisma migrate dev --name what_changed
+cd ../cloud    && npx prisma migrate dev --name what_changed
+```
+
+Both apps need their own migration: SQLite and Postgres generate different SQL for the same change. `npm run db:check` fails CI if a generated schema was hand-edited, which is what stops the two products quietly growing different columns.
+
+The models avoid enums, arrays and native column types. That began as a SQLite limitation and is now the contract that lets one model file serve both providers — keep it.
+
+---
+
+## Deploying onsite at a customer
+
+A small always-on machine in the restaurant, on the same network as the staff tablets. This is the design target and the only arrangement where an internet outage does not stop the till.
+
+### The machine
+
+A fanless mini-PC: 4 cores, **8 GB RAM**, an NVMe or SATA **SSD** (not eMMC, not an SD card), wired Ethernet. The database is tiny; the RAM is for `next build`, which peaks well above a gigabyte. 4 GB works with swap added; 2 GB gets killed mid-build.
+
+SQLite is crash-safe here — rollback journal with `synchronous=FULL`, so a power cut rolls the in-flight write back — but that guarantee depends on the storage telling the truth about flushing. Consumer SSDs do; eMMC and SD cards often do not, and they wear out under a write-per-order workload. Add a small UPS, and put the router on it too: a running server the tablets cannot reach is the same as no server.
+
+### OS and Node
+
+Debian 12 or 13, server install, no desktop. Then Node **22 LTS**:
+
+```bash
+sudo apt-get update && sudo apt-get install -y curl ca-certificates git
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt-get install -y nodejs
+node -v && node -p process.versions.modules   # expect v22.x and ABI 127
+```
+
+The Node major matters more than it looks. `better-sqlite3` publishes no prebuilt binary for Node 20's ABI at all, so on Node 20 the install falls through to compiling from source and needs `build-essential` and `python3` present. On Node 22 a prebuilt exists and a modern Debian's glibc is new enough to load it.
+
+If the box has less than 8 GB, add swap before building:
+
+```bash
+sudo fallocate -l 4G /swapfile && sudo chmod 600 /swapfile
+sudo mkswap /swapfile && sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+```
+
+### Install
+
+```bash
+cd ~ && git clone <repo-url> restroreserve && cd restroreserve
+npm ci                                  # the full tree, from the repo root
+```
+
+Install everything — `--omit=dev` looks like sensible hardening and breaks three things: `next build` needs `tailwindcss` and `typescript`, `prisma migrate` needs `dotenv` (loaded by `prisma.config.ts`), and `prisma db seed` needs `tsx`. None of it runs at request time.
+
+Now the configuration, in `apps/onsite/.env`:
+
 ```ini
-# 3. /etc/systemd/system/restroreserve.service
+DATABASE_URL="file:./data/app.db"
+SESSION_SECRET="<openssl rand -base64 32>"
+APP_URL="http://192.168.1.50:3000"
+```
+
+```bash
+chmod 600 apps/onsite/.env    # this file holds the key that signs every session
+```
+
+Three things about that file:
+
+**`APP_URL` stays `http://` on a LAN.** Its only effect is one line in `src/lib/session.ts`: the session cookie is marked `Secure` if and only if `APP_URL` begins with `https://`. Set it to `https://` on a plain-http box and browsers refuse to store the cookie — sign-in appears to work and bounces straight back to the login screen, on every tablet, with nothing in the log explaining it. Confusingly it still works in a browser *on the box itself*, because localhost counts as a secure context.
+
+**Leave `DATA_DIR` unset.** It exists for hosts that serve the application directory as static files. Here `next start` serves only `public/` and `.next/static`, so the default — `data/` beside the app — is correct.
+
+**Leave `TRUSTED_PROXY` unset.** There is no reverse proxy on a LAN box, and setting it lets anyone on the shop Wi-Fi forge `x-forwarded-for` and sidestep PIN throttling entirely.
+
+### Database and first owner
+
+```bash
+cd apps/onsite
+npx prisma migrate deploy      # creates data/ and app.db
+npx prisma db seed             # the ONLY way to create the first organization and owner
+npm run build                  # 1–3 minutes
+```
+
+The seed runs once and skips if an organization already exists. It creates demo content — a fictional restaurant, outlets, menu — because there is no setup wizard; you edit it into the real thing through the owner screens afterwards. **Change the seeded owner password and every PIN before the box goes into service**: those values are public in `prisma/seed.ts`.
+
+### Keeping it running
+
+Passenger and PM2 are not involved here; systemd is enough.
+
+```ini
+# /etc/systemd/system/restroreserve.service
 [Unit]
-Description=RestroReserve POS
+Description=RestroReserve POS (onsite)
 After=network.target
 
 [Service]
 Type=simple
 User=restro
-WorkingDirectory=/srv/restroreserve
+WorkingDirectory=/home/restro/restroreserve/apps/onsite
 Environment=NODE_ENV=production
 Environment=PORT=3000
 ExecStart=/usr/bin/npm run start
@@ -95,8 +174,193 @@ RestartSec=3
 WantedBy=multi-user.target
 ```
 
+`WorkingDirectory` is load-bearing: both `DATABASE_URL` and the default data directory resolve relative to it, so starting from the wrong place silently creates a second, empty database.
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now restroreserve
+systemctl status restroreserve
+journalctl -u restroreserve -f
+```
+
+**Exactly one process.** No PM2 cluster mode, no second unit. The backup scheduler lives inside the process (two would write duplicate backups) and the PIN rate limiter is an in-memory map (two would double the brute-force allowance). If you ever need more, all three of shared rate-limit state, a designated scheduler, and WAL mode have to be solved first.
+
+### Reaching it from the tablets
+
+Staff type the box's address, so it must not move. Pin it with a **DHCP reservation in the router** rather than a static IP on the box — one place to change, and it cannot collide.
+
+mDNS (`http://pos.local:3000`) works from iPhones and iPads out of the box and needs `avahi-daemon` on the box; Android support is unreliable enough that the IP remains the answer you write on a sticker.
+
+### Updating a customer's box
+
+Back up first — that ordering is the only reason step 0 exists.
+
+```bash
+# 0. Owner → Admin → Back up now, and copy that JSON off the box. Then a raw snapshot,
+#    which is the one that survives a bad migration:
+cp -a apps/onsite/data ~/restroreserve-data.$(date +%F)
+
+cd ~/restroreserve
+git pull
+npm ci
+cd apps/onsite && npx prisma migrate deploy
+cd ../.. && npm run build --workspace apps/onsite
+sudo systemctl restart restroreserve
+```
+
+Migrate before building, and never the reverse: a half-finished build leaves `.next` in a state the running process may still be serving from.
+
+### What this does not give you
+
+One machine, one point of failure. If it dies mid-service there is no failover — keep the last backup somewhere you can reach, and know that a spare box needs an OS install before it can take over. The tablets have no offline mode either: they are browsers, so if the box is down, ordering stops. That is the trade for a till that ignores an ISP outage.
+
+---
+
+## Deploying to shared hosting (cPanel and Passenger)
+
+This is where the live deployment runs, and it took a day of archaeology. Most of what follows exists because something specific broke.
+
+### Whether the plan can host it at all
+
+Four checks, in order. Each is cheap and each is fatal.
+
+| Check | Fails when |
+|---|---|
+| **Setup Node.js App** exists (CloudLinux Node Selector + Passenger) | Plan is PHP-only — then nothing here applies |
+| Node **20+** offered | Stuck on 18 or older |
+| **Environment variables** can be set in the panel | Panel hides them, so `SESSION_SECRET` cannot be passed |
+| App runs as **one process** | Panel insists on several workers — see the one-process rule above |
+
+Notably absent from that list: a compiler. The release now carries its own database binary, which is the next section.
+
+### The three things that make it work
+
+**The build must be webpack, not Turbopack.** `apps/onsite/package.json` runs `next build --webpack` deliberately. Turbopack resolves native packages through content-hashed *symlinks* under `.next/node_modules`, and FTP cannot carry a symlink — so a Turbopack build uploads cleanly and then every page 500s with `Cannot find module 'better-sqlite3-<hash>'`. The webpack build emits no such directory and is about a third the size. Do not "simplify" this back.
+
+**The database driver is compiled for the host, by CI.** `better-sqlite3` publishes no prebuild for Node 20's ABI, and its Node 22 prebuild needs glibc 2.29 while CloudLinux 7 ships 2.17 — prebuilt too new, compiling impossible without a toolchain. So the deploy workflow compiles the binary inside a `manylinux2014` container (which *is* CentOS 7, glibc 2.17) for both ABIs, ships it in `vendor/`, and `apps/onsite/server.js` installs the matching one at boot via `scripts/install-native.js`. Because a deploy touches `tmp/restart.txt`, a release repairs the driver by itself with nobody in the hosting panel.
+
+**WebAssembly is bounds-checked, not guarded.** Prisma's query compiler is Wasm, and V8 normally reserves a multi-gigabyte guard region per Wasm memory. CloudLinux LVE caps address space, so that reservation is refused and the process dies reporting a heap OOM while the heap is 27 MB — it is address space, not heap. `server.js` sets `--wasm-enforce-bounds-checks` before requiring Next. It cannot go in `NODE_OPTIONS` (Node rejects V8 flags there) or on the command line (Passenger runs a file).
+
+### The automated deploy
+
+`.github/workflows/deploy.yml` ships **`apps/onsite` only**, on a push to the `deploy` branch. It typechecks, lints, runs the tests, checks the schemas still match the shared models, builds, assembles an allow-listed release, and uploads over FTPS.
+
+It refuses to ship in several ways on purpose: a release containing `data/`, an `.env`, a `*.db` or a stray `*.node`; an `FTP_REMOTE_PATH` inside `public_html` or one that looks like a document root; and a release whose migrations the live database cannot have applied — because this host has no shell, so `prisma migrate deploy` cannot reach `data/app.db`. After uploading it fetches your public URL and fails the run if the code is downloadable.
+
+Configure under Settings → Secrets and variables → Actions:
+
+| | |
+|---|---|
+| Secrets | `FTP_SERVER`, `FTP_USERNAME`, `FTP_PASSWORD` |
+| Variables | `FTP_REMOTE_PATH` (application root, trailing slash, **not** `public_html`), `APP_ORIGIN`, `NODE_VERSION` |
+
+Releasing is `git push origin main:deploy`. If a release contains a migration, migrate the database by hand first — download `data/app.db`, run `npx prisma migrate deploy` against it locally, upload it back during a closed period — then re-run the workflow with `migrations_already_applied` ticked.
+
+### One-time panel setup
+
+In **Setup Node.js App**: Node 22, Application root a **plain directory** such as `restroreserve`, Application URL your subdomain, startup file **`server.js`**.
+
+The application root must **not** be the subdomain's document root. cPanel names those after the domain (`/home/USER/pos.example.com/`), and anything inside one is served as a static file before Passenger sees the request. Deploying there once made `package.json`, `server.js` and `prisma/schema.prisma` downloadable — and would have exposed `data/app.db`, which is every password hash, PIN hash and customer phone number in the business. Verify with `curl -I https://your-domain/package.json`: 404 is right, 200 is not.
+
+Environment variables go in the panel, not a file — the workflow never uploads `.env`:
+
+```ini
+NODE_ENV=production
+DATA_DIR=/home/USER/restroreserve-data
+DATABASE_URL=file:/home/USER/restroreserve-data/app.db
+SESSION_SECRET=<openssl rand -base64 32>
+APP_URL=https://pos.example.com
+TRUSTED_PROXY=1
+```
+
+`DATA_DIR` moves the database directory, uploads **and** backups together. Pointing `DATABASE_URL` somewhere private is not sufficient: uploads and backups resolve from `DATA_DIR` (`src/lib/paths.ts`), so the backup JSONs would stay in the app directory. Those files are a whole-organization dump including every credential hash.
+
+Then press **Run NPM Install**, and **Restart**. The panel's *Run JS script* button can run `check`, a preflight that reports which Node it used, whether the driver loaded, and whether the database opened.
+
+### Can the cloud app run here too?
+
+Not comfortably, and usually not at all.
+
+It has no native module and no Wasm address-space problem, so the two hardest onsite obstacles vanish. But it needs **Postgres**, and shared cPanel plans overwhelmingly offer MySQL only. Without a Postgres you would have to point `DATABASE_URL` at a hosted one (Neon, Supabase) across the public internet, which adds latency to every query on a host already spending ~1.4 s of CPU per request.
+
+That number is the real objection. Measured on this host: a static file takes 42 ms, a request that reaches Node takes about 1.4 s, and the same request locally takes 3 ms. That is survivable for one restaurant whose staff are standing in it. It is a poor foundation for a service you charge other restaurants for. Put the cloud app on a VPS.
+
+---
+
+## Deploying to a VPS
+
+The most flexible option, and the only sensible home for the cloud app. Both can share one box.
+
+### Sizing and base setup
+
+2 vCPU and 2 GB RAM is enough for one app, 4 GB if you run both and build on the box. Add swap if you are at 2 GB. A Hetzner CX22 or equivalent is around €4/month.
+
+```bash
+adduser restro && usermod -aG sudo restro     # do not run the app as root
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt-get install -y nodejs nginx certbot python3-certbot-nginx git
+```
+
+Clone the monorepo once; both apps run from it.
+
+```bash
+sudo -u restro -i
+git clone <repo-url> restroreserve && cd restroreserve && npm ci
+```
+
+### Postgres, for the cloud app
+
+```bash
+sudo apt-get install -y postgresql
+sudo -u postgres createuser --pwprompt restro
+sudo -u postgres createdb -O restro restroreserve_cloud
+```
+
+`apps/cloud/.env`:
+
+```ini
+DATABASE_URL="postgresql://restro:PASSWORD@localhost:5432/restroreserve_cloud"
+SESSION_SECRET="<openssl rand -base64 32>"
+APP_URL="https://app.example.com"
+TRUSTED_PROXY=1
+```
+
+`apps/onsite/.env` on the same box:
+
+```ini
+DATABASE_URL="file:./data/app.db"
+DATA_DIR="/srv/restroreserve-data"
+SESSION_SECRET="<a DIFFERENT openssl rand -base64 32>"
+APP_URL="https://pos.example.com"
+TRUSTED_PROXY=1
+```
+
+**The two apps must not share `SESSION_SECRET`.** It is the key that signs session cookies; a shared value means a cookie minted by one app verifies in the other, and since both read the same claim names, a session from the single-tenant build would be accepted by the multi-tenant one. Different secrets, always.
+
+`TRUSTED_PROXY=1` is correct here — and only here — because nginx really is in front and sets `X-Forwarded-For`. `DATA_DIR` is set for onsite so its database and backups sit outside the deploy tree and survive a `git pull` that replaces the directory.
+
+```bash
+cd apps/cloud  && npx prisma migrate deploy && cd ../..
+cd apps/onsite && npx prisma migrate deploy && npx prisma db seed && cd ../..
+npm run build
+```
+
+### Two services
+
+Two units, two ports, same shape as the onsite unit above but with `WorkingDirectory` and `PORT` differing:
+
+```ini
+# /etc/systemd/system/restroreserve-onsite.service   → PORT=3000, apps/onsite
+# /etc/systemd/system/restroreserve-cloud.service    → PORT=3001, apps/cloud
+```
+
+```bash
+sudo systemctl enable --now restroreserve-onsite restroreserve-cloud
+```
+
+### nginx and TLS
+
 ```nginx
-# 4. Reverse proxy — nginx. Caddy needs only `reverse_proxy localhost:3000`.
 server {
   server_name pos.example.com;
   client_max_body_size 8M;              # dish photos are up to 4 MB
@@ -107,249 +371,83 @@ server {
     proxy_set_header X-Forwarded-Proto $scheme;
   }
 }
+
+server {
+  server_name app.example.com;
+  client_max_body_size 8M;
+  location / {
+    proxy_pass http://127.0.0.1:3001;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+}
 ```
 
-Then TLS (`certbot --nginx -d pos.example.com`), and **firewall port 3000 so only the proxy reaches it** — otherwise the app is also served over plain HTTP on the public IP, where the `Secure` cookie won't be sent and staff will appear unable to sign in.
+```bash
+sudo certbot --nginx -d pos.example.com -d app.example.com
+sudo ufw allow 'Nginx Full' && sudo ufw allow OpenSSH && sudo ufw enable
+```
 
-### cPanel-style shared hosting — check these first
+**Firewall ports 3000 and 3001 so only nginx reaches them.** Otherwise the app is also served over plain HTTP on the public IP, where the `Secure` cookie is not sent — and staff will report that sign-in silently fails, with nothing wrong in the logs.
 
-Most such hosts fail at least one of these. Test in this order; each is cheap and each is fatal.
-
-**Resolved for this deployment (2026-08-12):** the release now carries a `better_sqlite3.node` compiled in CI against glibc 2.17 (`vendor/`), which `server.js` installs at boot via `scripts/install-native.js`. A cPanel host therefore no longer needs a compiler or a compatible prebuild — the check below stands as the explanation of *why*, not as a step you must pass.
-
-1. **`npm install better-sqlite3` succeeds *and the binary loads*.** Two separate failures. The install can succeed by downloading a prebuilt that the host cannot then load — the published prebuilts link against **glibc 2.29+**, while CloudLinux/CentOS 7 ships 2.17, so every query throws `ERR_DLOPEN_FAILED` with ``/lib64/libm.so.6: version `GLIBC_2.29' not found``. Confirmed on a real cPanel host. The release therefore ships an `.npmrc` containing `build_from_source=true`, which makes the panel's **Run NPM Install** compile against the host's own glibc. That needs `python3`, `make` and `g++` present; if they are absent the install now fails loudly instead of the app failing at request time. Check the host's glibc with `ldd --version` if you have any shell at all — 2.28 or lower means prebuilts will not work.
-2. **Your process is allowed to stay running,** and the host does not spawn multiple workers for it. Passenger's default is several. If you cannot pin it to one, stop here (see [Run exactly one process](#run-exactly-one-process)).
-3. **A directory outside the web root is writable and persists across deploys.** `data/` holds the database, the payment QR and dish photos. If it sits under the web root, the backup JSONs — which contain every password and PIN hash — become downloadable.
-
-If any of the three fails, the cheapest working option is the smallest VPS your provider sells. This app needs one process and a disk, not much else.
-
-### FTP-only hosting — this cannot work
-
-If the only access to the server is FTP, RestroReserve cannot run there. Not "awkward" — structurally impossible, for two independent reasons:
-
-1. **FTP moves files; it cannot start a process.** Next.js serves from a live Node process (`next start`). Uploading the app leaves you with files nothing is executing. There is no `.htaccess` or index file that changes this — a PHP/static host has no Node runtime to hand the request to.
-2. **The database driver is a compiled binary for one exact platform.** `better-sqlite3` ships `better_sqlite3.node`; the copy in this repo is `Mach-O 64-bit arm64` (built for the dev Mac) and will not load on a Linux host. Producing a matching one means compiling on that platform — which needs a shell, which you don't have.
-
-And two more that follow from the same root: `prisma migrate deploy` can't run, so the schema can never change; and the backup scheduler lives in the process, so there are no automatic backups.
-
-Uploading a pre-built app doesn't rescue it either. Building locally and FTP-ing the result means pushing **~22 MB of build output plus 844 MB of `node_modules` across 31,733 files** — hours over FTP, partial failures likely — and it still ends with a platform-wrong native binary and nothing running it.
-
-If the host has a cPanel **"Setup Node.js App"** panel, there is a path — see the next section.
-
-**What to do instead**, in order of preference:
-
-| Option | Needs | Why it's better |
-|---|---|---|
-| **Mini-PC/NUC in the restaurant** | a box and the shop Wi-Fi | The design intent: service keeps running when the internet doesn't |
-| **Cheapest VPS + a subdomain** | DNS access to point `pos.yourdomain` at it | Keeps the existing shared host serving the website; full shell for releases |
-
-Neither costs much more than the shared plan, and both are a straightforward path from here. Keep the FTP host for the public website.
-
-### cPanel-only hosting (no shell) — the workable path
-
-If the panel has **Setup Node.js App** (CloudLinux Node.js Selector + Passenger, standard on most cPanel plans), this app can run without ever opening a shell. It is fiddlier than a VPS and worth doing only if a VPS is genuinely not an option.
-
-**Check these four first. Any failure ends the attempt.**
-
-| Check | Where | Fails when |
-|---|---|---|
-| Node **20+** offered (22 preferred) | Setup Node.js App → Node version | Plan is stuck on 18 or older |
-| You can set **environment variables** | same panel | Panel hides them; you cannot pass `SESSION_SECRET` |
-| **Run NPM Install** completes | same panel | `better-sqlite3` has no prebuild for that Node/libc and no compiler is available |
-| App runs as **one process** | ask support for `passenger_max_pool_size` / `PASSENGER_MAX_POOL_SIZE=1` | Panel insists on several workers — see [Run exactly one process](#run-exactly-one-process) |
-
-The fourth is the one that quietly bites: several workers means duplicate scheduled backups and a PIN brute-force limit multiplied by the worker count.
-
-**The trick that makes this work: build locally, install on the host.**
-
-- `next build` is memory-hungry and shared plans cap RAM, so build on your own machine and upload `.next`.
-- `node_modules` must be installed **on the host**, because `better-sqlite3` is a platform-specific binary — your Mac's copy is `Mach-O arm64` and will not load on their Linux. Never upload `node_modules`; use the panel's **Run NPM Install** button.
-- **The build must be a webpack build**, which is why `npm run build` passes `--webpack`. Turbopack resolves native packages through content-hashed *symlinks* it writes into `.next/node_modules` (`better-sqlite3-90e2652d…` → `../../node_modules/better-sqlite3`). FTP cannot carry a symlink, so a Turbopack build uploads "successfully" and then every page 500s with `Cannot find module 'better-sqlite3-<hash>'` — verified by deploying a copy into a clean directory and booting it. The webpack build emits no `.next/node_modules` at all, and is about a third the size (6 MB / ~370 files versus 22 MB / ~860). If you ever build by hand, do not reach for `next build` directly.
-
-**Automated releases.** `.github/workflows/deploy.yml` does all of the below on a push to the `deploy` branch: typecheck, lint, tests, build, assemble the upload tree, and push it over FTPS. It refuses to ship if the release would carry a `data/` directory, an `.env`, a `*.db`, or a compiled `*.node` binary, and it fails the run when a release contains migrations the live database cannot have applied. Configure `FTP_SERVER`/`FTP_USERNAME`/`FTP_PASSWORD` (secrets) and `FTP_REMOTE_PATH`/`NODE_VERSION` (variables) under Settings → Secrets and variables → Actions. The manual steps below remain the reference for the first deploy and for anything the workflow deliberately will not touch — the database and the panel buttons.
-
-**Steps**
-
-1. **Locally:** `npm ci && npm run build`. Then run `npx prisma migrate deploy` against a *fresh* `data/app.db` and `npx prisma db seed` — you are producing a ready-made database file, because you cannot run migrations on the host.
-2. **Upload** by File Manager or FTP into the app root (e.g. `/home/USER/restroreserve`), **not** `public_html`:
-   - `.next/` (only `server/`, `static/`, `build/` and the manifests — skip `.next/dev`, which is dev-server scratch and can be gigabytes)
-   - `public/`, `prisma/`, `src/`, `server.js`, `package.json`, `package-lock.json`, `next.config.ts`, `postcss.config.mjs`, `tsconfig.json`
-   - `data/app.db` — the migrated, seeded database from step 1
-   - **Not** `node_modules`, **not** `.env`, **not** `.next/dev`
-3. **Create the app** in Setup Node.js App:
-   - *Application root:* `restroreserve`
-   - *Application URL:* your subdomain, e.g. `pos.example.com`
-   - *Application startup file:* **`server.js`** — this repo ships one for exactly this purpose. Passenger runs a file, not `npm run start`, and `server.js` is the minimal Next custom server ([Next's documented pattern](https://nextjs.org/docs/app/guides/custom-server)).
-4. **Set environment variables** in the panel:
-
-   ```ini
-   NODE_ENV=production
-   DATABASE_URL=file:/home/USER/restroreserve/data/app.db   # absolute
-   SESSION_SECRET=<openssl rand -base64 32>
-   APP_URL=https://pos.example.com                          # https, or the cookie isn't Secure
-   TRUSTED_PROXY=1                                           # Apache/LiteSpeed sits in front
-   ```
-
-5. **Run NPM Install** in the panel. Watch for `better-sqlite3`; if it errors here, stop — see the check table.
-6. **Restart** from the panel. Passenger also restarts when `tmp/restart.txt` in the app root changes, which you can `touch` over FTP — handy, since it is the one control you have without the panel.
-7. **Enable AutoSSL** for the subdomain, then run the [Post-Deploy Checks](#post-deploy-checks) against the public https URL.
-
-**What was verified here, and what wasn't.** `server.js` was tested locally against a production build: every page and API route served, the 404 boundary returned a real 404, no dev chunks, and — the one that could have silently broken — **`instrumentation.ts` still runs, so scheduled backups work under a custom server** (proved by `[backup] wrote 1 scheduled backup(s)` after a clean boot with a backup due). Passenger itself could not be tested from here; the panel-specific steps are from its documented behaviour.
-
-**Releasing an update afterwards** is the same shape, minus the database: rebuild locally, upload the changed `.next/` and `src/`, press Run NPM Install only if `package.json` changed, then Restart. **If the release contains a migration**, you cannot run it on the host — take the live `data/app.db` down by File Manager, migrate it locally, and upload it back during a closed period. That is the real cost of this hosting: every schema change becomes a manual, offline database swap.
-
-### Dependency advisories
-
-`npm audit` currently reports **12 high-severity advisories, none in the code path this app serves requests from** (checked 2026-07-30):
-
-- **9 are the ESLint toolchain** (`minimatch` → `brace-expansion` DoS). They are *installed* on the server (see below — this app cannot build without devDependencies) but never executed: ESLint runs in development and CI, never in the request path.
-- **`postcss`** — build-time CSS processing, and the only CSS it ever sees is ours.
-- **`sharp`** — libvips CVEs, reachable only through Next's image optimizer. This app imports `next/image` nowhere (it serves dish photos as plain `<img>` from its own disk), so nothing routes attacker-supplied images into it.
-
-Run `npm audit fix` (non-breaking) before an internet-facing deploy, and re-check after any Next upgrade — a Next minor bump is what clears `postcss` and `sharp`. Do not run `npm audit fix --force`: it will move major versions.
-
-### Releasing to a shared server
-
-The LAN recipe below ([Routine releases](#routine-releases-outlet-box-on-the-lan)) is `git pull && build && restart`. On a shared, internet-facing server the same steps need an order and a couple of facts that are easy to get wrong.
-
-**Install the full dependency tree. `--omit=dev` does not work here** — it looks like an obvious hardening and it breaks three separate things:
-
-| Command | devDependency it needs |
-|---|---|
-| `npm run build` | `tailwindcss` + `@tailwindcss/postcss` (referenced by `postcss.config.mjs`), `typescript`, `@types/*` |
-| `npx prisma migrate deploy` | `dotenv` — `prisma.config.ts` starts with `import "dotenv/config"` |
-| `npx prisma db seed` | `tsx` — the seed runs as `npx tsx prisma/seed.ts` |
-
-So either install everything on the server, or build on a machine that has everything and ship the artifact. Nothing in the extra tree is *executed* at request time.
-
-**`next build` is memory-hungry.** On the 512 MB–1 GB VPS tiers, it can be OOM-killed. Add swap or build elsewhere — a build that dies halfway leaves `.next` in a state the old process may still be serving from.
-
-**Release, in this order:**
+### Releasing
 
 ```bash
-# 0. Back up FIRST — before any migration touches the schema.
-#    Owner → Admin → Back up now (the API needs an owner session cookie, so the
-#    UI is the practical route), then copy that JSON off the box. Plus a raw
-#    snapshot, which is the one that survives a bad migration:
+# 0. Back up first, per app.
 cp -a /srv/restroreserve-data /srv/restroreserve-data.$(date +%F)
+pg_dump -U restro restroreserve_cloud > ~/cloud-$(date +%F).sql
 
-# 1. Fetch and install
-cd /srv/restroreserve
+cd ~/restroreserve
 git fetch --tags && git checkout <tag>
-npm ci                       # full tree — see above
-
-# 2. Migrate, then build. This order matters (next note).
-npx prisma migrate deploy
-npm run build
-
-# 3. Swap the process
-sudo systemctl restart restroreserve
-```
-
-**Why migrate before build, and what that costs.** `prisma migrate deploy` changes the schema while the *old* build is still serving traffic, so for a few seconds the running code sees a newer schema than it was compiled against. That is safe only for additive migrations — a new table, a new column with a default. A rename or a drop will make the old process throw until the restart lands. Every migration in this repo so far has been additive apart from one deliberate data step, but treat it as a rule: **additive-only if you release without a maintenance window**, otherwise stop the service first.
-
-**Restarting drops in-flight requests.** `systemctl restart` is a hard swap, so a tap landing in that window fails. It recovers on its own: the client shows "Can't reach the till", and the board, bookings and order screens each re-poll within 15 seconds. Still, release between services rather than mid-dinner.
-
-**Then run the [Post-Deploy Checks](#post-deploy-checks)** against the public URL, not `localhost` — the two things only the real URL exercises are TLS and the `Secure` cookie, and a wrong `APP_URL` presents exactly as "staff can't sign in".
-
-**Rolling back a shared-server release:**
-
-```bash
-git checkout <previous-tag> && npm ci && npm run build
-sudo systemctl restart restroreserve
-```
-
-Migrations are forward-only, so code rolls back but the schema does not. If the release included a migration you need to undo, restore the pre-release backup from step 0 *after* rolling the code back — that is the only reason step 0 is not optional.
-
-## Environments
-
-| Environment | Purpose | URL |
-|---|---|---|
-| local dev | development | http://localhost:3111 (3000 is usually taken on the dev machine) |
-| outlet server | live, on restaurant LAN | http://&lt;server-ip&gt;:3000 *(record it here after setup)* |
-| shared server | live, over the internet | https://&lt;subdomain&gt; *(record it here after setup)* — needs `APP_URL` https and `TRUSTED_PROXY=1` |
-
-## Prerequisites
-
-1. Node.js 20 minimum, 22 LTS preferred — see [What any server must provide](#what-any-server-must-provide).
-2. This repo cloned onto it (`git clone … && npm ci`). The full dependency tree, including devDependencies: this app cannot build, migrate or seed without them.
-3. A writable `data/` directory holding `app.db`, `uploads/`, `backups/` — created automatically beside the app, or pointed elsewhere with an absolute `DATABASE_URL` (see the shared-server recipe).
-4. Staff devices on the same network, with the server's IP reachable (consider a static LAN IP or mDNS name).
-
-## Environment Variables
-
-| Name | Purpose | Where it's set |
-|---|---|---|
-| `DATABASE_URL` | SQLite location, e.g. `file:./data/app.db` | `.env` on the server |
-| `SESSION_SECRET` | Signs session cookies — generate with `openssl rand -base64 32`; changing it logs every device out | `.env` on the server |
-| `APP_URL` | The URL staff devices use (for absolute links on bills) | `.env` on the server |
-| `TRUSTED_PROXY` | Set to `1` **only** if a reverse proxy in front of the app sets `x-forwarded-for`. Unset (the default, bare `npm run start`) means the header is ignored for rate limiting, because a client could otherwise rotate it to dodge throttling. | `.env` on the server |
-| `DATA_DIR` | Absolute path holding the database directory, `uploads/` and `backups/`. Defaults to `data/` beside the app. **Set it whenever the app root is inside a web-served directory** — see below. | `.env`, or the cPanel panel |
-
-### If the app root is web-served, move `DATA_DIR` — not just `DATABASE_URL`
-
-Shared cPanel plans name a subdomain's document root after the domain (`/home/USER/pos.example.com/`), and anything under one is served as a static file by Apache before Passenger sees the request. Deploying there means `https://pos.example.com/package.json` answers 200 — and once the app writes data, `https://pos.example.com/data/backups/<org>_<date>.json` does too. That file is a whole-organization dump: every password hash, every PIN hash, every customer name and phone number.
-
-Pointing `DATABASE_URL` somewhere private is **not sufficient**. Uploads and backups resolve from `DATA_DIR` (`src/lib/paths.ts`), not from the database URL, so they stay in the public folder unless you move them too. Set both, outside every document root:
-
-```ini
-DATA_DIR=/home/USER/restroreserve-data
-DATABASE_URL=file:/home/USER/restroreserve-data/app.db
-```
-
-Better still, put the *application root* itself outside the document root — a plain `restroreserve/` directory, with the Node app's Application URL pointing at the subdomain. Passenger routes the subdomain to the app, and nothing under the app root is ever served statically. Verify either way by fetching `https://<your-domain>/package.json`: a 404 means private, a 200 means still exposed. The deploy workflow performs exactly that check after every upload when the `APP_ORIGIN` variable is set.
-
-Never commit `.env` (gitignored). There are no third-party API keys in this system.
-
-## First release (outlet box on the LAN)
-
-For a shared server use [First release: VPS behind a reverse proxy](#first-release-vps-behind-a-reverse-proxy) instead — the `.env` differs in two ways that matter.
-
-```bash
-git clone <repo-url> restroreserve && cd restroreserve
-npm ci                  # lockfile is committed — install exactly what was tested
-cp .env.example .env    # then edit: set SESSION_SECRET, APP_URL
-npx prisma migrate deploy
-npx prisma db seed      # first boot only: creates the org/owner — or restore a backup instead
-npm run build
-npm run start           # add -- -p <port> if 3000 is taken
-```
-
-Then from a staff device, open `http://<server-ip>:3000`, sign in as the owner, and set real outlet details, users, and PINs. Before going live, change the seeded owner password (`owner1234`) and the demo manager/staff PINs — the seed values are public in `prisma/seed.ts`. Owner accounts intentionally have no PIN; leave them that way (see DESIGN.md, PIN scope). For unattended operation, wrap `npm run start` in a service:
-
-- **Linux:** a `systemd` unit with `Restart=always` and `WorkingDirectory` set to the repo.
-- **macOS:** a `launchd` plist (`KeepAlive`).
-
-## Routine releases (outlet box on the LAN)
-
-For a shared server use [Releasing to a shared server](#releasing-to-a-shared-server), which adds the backup-first ordering and the migration constraint.
-
-```bash
-git pull
 npm ci
-npx prisma migrate deploy
+cd apps/onsite && npx prisma migrate deploy && cd ../cloud && npx prisma migrate deploy && cd ../..
 npm run build
-# restart the service (systemctl restart restroreserve / launchctl kickstart)
+sudo systemctl restart restroreserve-onsite restroreserve-cloud
 ```
 
-Run `/deploy` in Claude Code first — it runs tests, lint, and the security-auditor gate before anything ships. Take a manual backup (owner → Back up now, or `POST /api/backups`) before every update.
+`next build` is memory-hungry; on a 2 GB box it can be OOM-killed, leaving `.next` half-written while the old process still serves from it. Add swap, or build elsewhere and copy the result.
 
-## Backups & Restore
+---
 
-- **What:** complete JSON export of the organization (outlets, users incl. credential hashes, menus, tables, orders) written to `data/backups/<org>-<timestamp>.json`, rotated per the owner's retention setting.
-- **When:** owner-configured schedule (off/daily/weekly) run by the app itself, plus manual "Back up now".
-- **Restore:** owner → Backups → Restore (or `POST /api/backups/restore`); reproduces the org's data exactly. Also fine: stop the app and copy back a whole `data/` directory — SQLite is a single file.
-- **Off-machine copies:** until remote upload ships (PRD §6), sync `data/backups/` off the server (external drive, rclone to any cloud) — a backup on the same disk as the database only protects against mistakes, not hardware loss.
+## Environment variables
+
+| Name | Purpose | Onsite | Cloud |
+|---|---|---|---|
+| `DATABASE_URL` | SQLite path (`file:…`) or Postgres URL | required | required |
+| `SESSION_SECRET` | Signs session cookies. Changing it signs every device out. Never shared between apps | required | required |
+| `APP_URL` | The URL users type. **Only** effect: the cookie is marked `Secure` when this starts with `https://` | required | required |
+| `TRUSTED_PROXY` | `1` **only** when a reverse proxy sets `x-forwarded-for`. Without one, a client can forge it and dodge rate limits | proxy only | proxy only |
+| `DATA_DIR` | Absolute path for the database directory, `uploads/` and `backups/`. Default is `data/` beside the app | when the app root is web-served | n/a |
+| `HEALTH_TOKEN` | Optional. Pass `?token=` to `/api/health` for detail (paths, versions, error messages) | optional | n/a |
+
+Never commit `.env` — both are gitignored. There are no third-party API keys in this system.
+
+## Backups and restore
+
+A complete JSON export of an organization — outlets, users including credential hashes, menus, tables, orders — written to `DATA_DIR/backups/`, rotated per the owner's retention setting. The owner sets the schedule (off, daily, weekly) and the app runs it in-process; there is also a manual "Back up now".
+
+Restore from the owner's Backups screen, or `POST /api/backups/restore`. Stopping the app and copying back a whole data directory works too — SQLite is one file.
+
+**Copy them off the machine.** A backup on the same disk as the database protects against mistakes, not against hardware failure. Until remote upload ships, sync `DATA_DIR/backups/` to an external drive or cloud storage on a timer.
 
 ## Rollback
 
-- **App:** `git checkout <previous-tag-or-commit> && npm ci && npm run build`, restart the service.
-- **Data:** restore the most recent backup JSON (or a copied `data/` snapshot). Migrations are forward-only; if a migration misbehaves, restore data from backup after rolling the code back.
+**App:** `git checkout <previous-tag> && npm ci && npm run build`, restart the service. On shared hosting, re-run the deploy workflow from the older commit.
 
-## Post-Deploy Checks
+**Data:** restore the most recent backup, or a copied data directory. Migrations are forward-only, so code rolls back but the schema does not — if a migration is the problem, roll the code back *and then* restore the pre-release backup. That ordering is why the backup step is not optional.
 
-1. `http://<server-ip>:<port>` loads; owner login works.
-2. Staff PIN sign-in works on a floor device *without a manager present*: End shift → the PIN screen appears (not first-time setup) → a staff member signs in with name + PIN alone.
-3. Seat a test table → add an item → settle (QR shows) → bill prints → table is free again. Cancel the test order's traces are acceptable (it's recorded as settled — use an obvious name like "TEST — ignore").
-4. Reports page shows today including the test order.
-5. "Back up now" produces a fresh file in `data/backups/` and `lastBackupAt` updates.
+## Post-deploy checks
+
+1. The site loads over HTTPS (or the LAN address) and `/api/health` reports `ok`.
+2. Owner sign-in works.
+3. End shift, then a staff member signs back in with their PIN — without a manager present.
+4. Seat a table, add an item, settle it, print the bill, confirm the table frees itself.
+5. Owner → Admin → Back up now, and the timestamp moves.
+6. On an internet-facing host: `curl -I https://your-domain/package.json` returns 404, not 200.
+
+## Dependency advisories
+
+`npm audit` reports high-severity advisories, none in the path this app serves requests from (checked 2026-07-30): the ESLint toolchain (`minimatch` → `brace-expansion`), which is installed but never executed at request time; `postcss`, which is build-time and only ever sees our CSS; and `sharp`, reachable only through Next's image optimizer, which this app never uses — dish photos are served as plain `<img>` from its own storage.
+
+Run `npm audit fix` (non-breaking) before an internet-facing deploy and re-check after any Next upgrade. Do not run `npm audit fix --force`: it moves major versions.
