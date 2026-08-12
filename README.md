@@ -18,12 +18,25 @@ Everything is run from the repository root.
 ```bash
 npm install                      # installs every workspace at once
 
-npm run outlet -- dev -- -p 3111 # the app at http://localhost:3111
-                                 # 3000 is usually taken on this machine
+npm run outlet -- dev -- -p 3111 # self-hosted build  http://localhost:3111
+npm run cloud  -- dev -- -p 3222 # hosted service     http://localhost:3222
 ```
 
-Then open http://localhost:3111 and sign in. Seeded demo credentials are in
-CREDENTIALS.md; the owner is `yogalajay@gmail.com` / `owner1234`.
+They run side by side on different ports and different databases, which is the
+point: a change to `packages/` should be visible in both without touching
+either app.
+
+**Outlet** needs nothing beyond `npm install` — SQLite is a file, created for
+you at `apps/outlet/data/app.db`. Sign in with the seeded owner,
+`yogalajay@gmail.com` / `owner1234` (see CREDENTIALS.md).
+
+**Cloud** needs a Postgres to talk to. Locally:
+
+```bash
+createdb restroreserve_cloud
+cp apps/cloud/.env.example apps/cloud/.env   # then set DATABASE_URL, SESSION_SECRET
+cd apps/cloud && npx prisma migrate deploy
+```
 
 Is it healthy? `curl -s localhost:3111/api/health` answers without a login and
 names what is broken:
