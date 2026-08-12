@@ -1,0 +1,10 @@
+{
+  "name": "@restro/db",
+  "version": "0.1.0",
+  "private": true,
+  "//": "The data model, once. models.prisma is the source of truth; compose.mjs writes each app's schema, differing only in datasource provider and client output path.",
+  "scripts": {
+    "compose": "node compose.mjs",
+    "check": "node compose.mjs --check"
+  }
+}

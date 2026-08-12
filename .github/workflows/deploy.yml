@@ -168,6 +168,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # models.prisma is the source of truth for both products. If a generated
+      # schema was hand-edited, the two would silently diverge — a column that
+      # exists for the outlet and not the cloud.
+      - name: Check the schemas match the shared models
+        run: npm run db:check
+
       - name: Check types
         run: npm run typecheck
 

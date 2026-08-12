@@ -15,6 +15,8 @@
     "test": "npm run test --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "build": "npm run build --workspaces --if-present"
+    "build": "npm run build --workspaces --if-present",
+    "db:compose": "node packages/db/compose.mjs",
+    "db:check": "node packages/db/compose.mjs --check"
   }
 }
