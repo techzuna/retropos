@@ -1,7 +1,7 @@
 {
   "name": "restroreserve",
   "private": true,
-  "//": "Monorepo root. Two products share one domain: apps/outlet is the self-hosted box in a restaurant (SQLite), apps/cloud is the hosted multi-tenant service (Postgres). Feature code lives in packages/ so the two cannot drift apart.",
+  "//": "Monorepo root. Two products share one domain: apps/onsite is the self-hosted box in a restaurant (SQLite), apps/cloud is the hosted multi-tenant service (Postgres). Feature code lives in packages/ so the two cannot drift apart.",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -10,7 +10,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "outlet": "npm run --workspace apps/outlet",
+    "onsite": "npm run --workspace apps/onsite",
     "cloud": "npm run --workspace apps/cloud",
     "test": "npm run test --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",

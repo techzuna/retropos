@@ -2,7 +2,7 @@
 /*
  * One set of models, two products.
  *
- * apps/outlet runs SQLite on a box in the restaurant; apps/cloud runs Postgres
+ * apps/onsite runs SQLite on a box in the restaurant; apps/cloud runs Postgres
  * for many tenants. Only the datasource provider and the client output path
  * differ, so those live here and the 255 lines of models are written once —
  * a field added to Order cannot reach one product and miss the other.
@@ -21,8 +21,8 @@ const models = readFileSync(path.join(here, "models.prisma"), "utf8");
 
 const TARGETS = [
   {
-    name: "outlet",
-    file: path.join(here, "../../apps/outlet/prisma/schema.prisma"),
+    name: "onsite",
+    file: path.join(here, "../../apps/onsite/prisma/schema.prisma"),
     provider: "sqlite",
     output: "../src/generated/prisma",
     note:

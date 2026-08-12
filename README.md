@@ -2,7 +2,7 @@
 
 A restaurant point of sale, in two builds that share one codebase:
 
-- **`apps/outlet`** — self-hosted on a box in the restaurant. SQLite, one
+- **`apps/onsite`** — self-hosted on a box in the restaurant. SQLite, one
   process, keeps taking orders when the internet drops. This is what is live
   today.
 - **`apps/cloud`** — the hosted multi-tenant service. Postgres, many
@@ -18,7 +18,7 @@ Everything is run from the repository root.
 ```bash
 npm install                      # installs every workspace at once
 
-npm run outlet -- dev -- -p 3111 # self-hosted build  http://localhost:3111
+npm run onsite -- dev -- -p 3111 # self-hosted build  http://localhost:3111
 npm run cloud  -- dev -- -p 3222 # hosted service     http://localhost:3222
 ```
 
@@ -27,7 +27,7 @@ point: a change to `packages/` should be visible in both without touching
 either app.
 
 **Outlet** needs nothing beyond `npm install` — SQLite is a file, created for
-you at `apps/outlet/data/app.db`. Sign in with the seeded owner,
+you at `apps/onsite/data/app.db`. Sign in with the seeded owner,
 `yogalajay@gmail.com` / `owner1234` (see CREDENTIALS.md).
 
 **Cloud** needs a Postgres to talk to. Locally:
@@ -45,7 +45,7 @@ names what is broken:
 {"ok":true,"node":"v20","driver":"ok","wasm":"ok","database":"ok"}
 ```
 
-A `database-url-not-a-file` reason means `apps/outlet/.env` is missing —
+A `database-url-not-a-file` reason means `apps/onsite/.env` is missing —
 copy `.env.example` beside it and set `SESSION_SECRET`.
 
 ## The checks CI runs
@@ -65,7 +65,7 @@ generated and will be overwritten.
 
 ```bash
 npm run db:compose                                   # rewrite both schemas
-cd apps/outlet && npx prisma migrate dev --name what_changed
+cd apps/onsite && npx prisma migrate dev --name what_changed
 ```
 
 `npm run db:check` fails the build if a generated schema was hand-edited, which

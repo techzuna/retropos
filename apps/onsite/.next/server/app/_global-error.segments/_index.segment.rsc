@@ -1,0 +1,7 @@
+1:"$Sreact.fragment"
+2:I[9630,[],""]
+3:I[8288,["5587","static/chunks/5587-933f3258279c6072.js","8039","static/chunks/app/error-68728811f26ff316.js"],"default"]
+4:I[1380,[],""]
+5:I[5587,["5587","static/chunks/5587-933f3258279c6072.js","4345","static/chunks/app/not-found-257e0394347b16fd.js"],""]
+6:[]
+0:{"rsc":["$","$1","c",{"children":[null,["$","$L2",null,{"parallelRouterKey":"children","error":"$3","errorStyles":[],"errorScripts":[],"template":["$","$L4",null,{}],"notFound":[["$","main",null,{"className":"flex flex-1 items-center justify-center px-5 py-12","children":["$","div",null,{"className":"w-full max-w-md border border-line bg-white","children":[["$","div",null,{"className":"dhaka-band","aria-hidden":"true"}],["$","div",null,{"className":"p-6 sm:p-8","children":[["$","p",null,{"className":"eyebrow","children":"Not found"}],["$","h1",null,{"className":"mt-2 font-display text-2xl","children":"That page isn't here"}],["$","p",null,{"className":"mt-2 text-ink-soft","children":"The table, order or bill you followed may have been settled, cancelled, or removed from the floor plan since that link was made."}],false,["$","div",null,{"className":"mt-5 flex flex-wrap gap-2","children":[["$","$L5",null,{"href":"/pos","className":"btn btn-primary","children":"Back to tables"}],["$","$L5",null,{"href":"/pos/reservations","className":"btn btn-secondary","children":"Bookings"}]]}],"$undefined"]}]]}]}],[]]}]]}],"isPartial":false,"staleTime":300,"varyParams":"$W6","buildId":"OdO7U82yp4C5s9aTdzKsl"}

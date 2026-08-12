@@ -6,7 +6,13 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 # RestroReserve
 
-A self-hosted, multi-tenant restaurant POS, mobile/tablet-first. Staff seat tables, take and modify orders, settle via payment-QR or cash, print bills; managers maintain menus and read sales reports; owners administer outlets, users, settings, and JSON backups. One organization (owner) can run multiple outlets. Current stage: POS pivot in progress — the v1 diner-booking site is dropped and preserved in git history. **The owner's layout screenshots arrived 2026-07-29 and the screens now follow them (card grids, extras tables, status-chip booking cards, seat diagrams); the Chulho visual language is approved and stays, so take the mockups as layout reference, not palette.**
+**Two products, one codebase.** `apps/onsite` is the self-hosted build that runs on a box in a
+restaurant (SQLite, one process, keeps serving when the internet drops) — this is what is live
+today. `apps/cloud` is the hosted multi-tenant service (Postgres, many restaurants, subscription),
+scaffolded and booting but without signup or POS screens yet. Feature code lives in `packages/` so
+the two cannot drift: a fix belongs there, not in one app.
+
+A multi-tenant restaurant POS, mobile/tablet-first. Staff seat tables, take and modify orders, settle via payment-QR or cash, print bills; managers maintain menus and read sales reports; owners administer outlets, users, settings, and JSON backups. One organization (owner) can run multiple outlets. Current stage: POS pivot in progress — the v1 diner-booking site is dropped and preserved in git history. **The owner's layout screenshots arrived 2026-07-29 and the screens now follow them (card grids, extras tables, status-chip booking cards, seat diagrams); the Chulho visual language is approved and stays, so take the mockups as layout reference, not palette.**
 
 ## Documentation Map
 
@@ -26,43 +32,46 @@ A self-hosted, multi-tenant restaurant POS, mobile/tablet-first. Staff seat tabl
 
 ## Commands
 
-- `npm run dev` — dev server on http://localhost:3000 (port 3000 is often taken on this machine — use `npm run dev -- -p 3111`)
-- `npm run build` / `npm run start` — production build / serve
-- `npm run lint` — ESLint
-- `npm test` / `npm run test:watch` — Vitest
-- `python3 tests/browser/no-horizontal-scroll.py` — asserts no page scrolls sideways at 320–1100px (needs a running dev server)
-- `npx prisma migrate dev` — create/apply migrations (SQLite at `data/app.db` via `DATABASE_URL`)
-- `npx prisma db seed` — seed demo org (2 outlets, users, menus, extras, zoned/shaped tables)
+Run everything from the monorepo root.
+
+- `npm install` — installs every workspace at once
+- `npm run onsite -- dev -- -p 3111` — the self-hosted app (3000 is usually taken here)
+- `npm run cloud -- dev -- -p 3222` — the hosted app; needs a Postgres and a migrate first
+- `npm test` / `npm run lint` / `npm run typecheck` / `npm run build` — across all workspaces
+- `npm run db:check` — fails if a generated schema no longer matches `packages/db/models.prisma`
+- `npm run db:compose` — rewrite both app schemas after editing the models
+- `python3 apps/onsite/tests/browser/no-horizontal-scroll.py` — no sideways scroll at 320–1100px (needs a running dev server)
+- Per app: `cd apps/onsite && npx prisma migrate dev` / `npx prisma db seed`
+
+**Changing the data model:** edit `packages/db/models.prisma`, never an app's `schema.prisma` —
+those are generated and will be overwritten. Then `npm run db:compose` and generate a migration in
+*each* app, because SQLite and Postgres need their own.
 
 ## Project Structure
 
 ```
 restroReserve/
-├── data/                    # gitignored: app.db, uploads/ (QR + dish photos), backups/*.json
-├── prisma/                  # schema.prisma (SQLite), migrations, seed.ts
-├── src/
-│   ├── app/
-│   │   ├── login/           # email+password: pairs a device, and manager/owner re-entry
-│   │   ├── signin/          # floor PIN sign-in & handover (needs only the pairing)
-│   │   ├── pos/             # staff: table board (+ manager floor editing), orders, bookings, bill
-│   │   ├── manage/          # manager: menu + extras, reports
-│   │   ├── admin/           # owner: outlets, users, settings, backups
-│   │   └── api/             # route handlers (see DESIGN.md API table)
-│   ├── components/          # Dialog.tsx (ask/confirm modals), TableDiagram, PinInput…
-│   └── lib/                 # domain core — ALL tenancy scoping lives here
-│       ├── db.ts            # Db/OrgContext types + resolveDb(); no client singleton
-│       ├── session.ts       # cookie sessions, PIN switch, requireRole()
-│       ├── orders.ts        # seat / lines / settle / cancel; derives the table board
-│       ├── reservations.ts  # bookings: overlap rule, confirm / seat / cancel / no-show
-│       ├── modifiers.ts     # extras catalogue + per-item allow-list
-│       ├── tables.ts        # floor plan: add / re-seat / re-zone / re-shape / retire
-│       ├── service-periods.ts # Breakfast/Lunch/Dinner windows a booking is taken against
-│       ├── outlet.ts        # the paired outlet's profile (name/currency/timezone/QR)
-│       ├── reports.ts       # day- and month-bucketed summaries
-│       └── backup.ts        # JSON export/import + scheduler
-├── tests/                  # Vitest, plus tests/browser/ Playwright checks
-└── *.md
+├── apps/
+│   ├── onsite/              self-hosted: SQLite, one process, runs in the restaurant
+│   │   ├── data/            gitignored: app.db, uploads/, backups/
+│   │   ├── prisma/          GENERATED schema + its own migrations
+│   │   ├── scripts/         check-host.js (panel preflight), install-native.js
+│   │   ├── server.js        Passenger entry point; also sets the V8 wasm flag
+│   │   └── src/             app/, components/, lib/
+│   └── cloud/               hosted: Postgres via pg, many tenants
+│       ├── prisma/          GENERATED schema + its own migrations
+│       └── src/             app/, lib/
+├── packages/
+│   ├── domain/              rules both products obey — no fs, no db driver, no request
+│   └── db/                  models.prisma (source of truth) + compose.mjs
+└── .github/workflows/       deploy.yml ships apps/onsite only
 ```
+
+Where code belongs: a rule about money, roles, time or validation goes in `packages/domain`. A
+data-model change goes in `packages/db/models.prisma`. Anything that needs a filesystem, a specific
+database driver or a hosting quirk stays in the app — that is why `db.ts`, `uploads.ts` and
+`backup.ts` are not shared.
+
 
 ## Conventions
 

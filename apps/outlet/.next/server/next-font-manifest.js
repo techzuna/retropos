@@ -1,1 +1,0 @@
-self.__NEXT_FONT_MANIFEST='{"pages":{},"app":{"/Users/asthaaimac/Code/Aj/restroReserve/apps/outlet/src/app/layout":["static/media/7d4881bb7e1bf84d-s.p.woff2","static/media/59df03d642d74c2d-s.p.woff2","static/media/de42cfb9a3b980ae-s.p.woff2"]},"appUsingSizeAdjust":true,"pagesUsingSizeAdjust":false}';

@@ -1,0 +1,1 @@
+globalThis.__RSC_MANIFEST=(globalThis.__RSC_MANIFEST||{});globalThis.__RSC_MANIFEST["/api/menu/items/[id]/route"]={"moduleLoading":{"prefix":"/_next/"},"ssrModuleMapping":{},"edgeSSRModuleMapping":{},"clientModules":{},"entryCSSFiles":{"/Users/asthaaimac/Code/Aj/restroReserve/apps/onsite/src/app/api/menu/items/[id]/route":[]},"rscModuleMapping":{},"edgeRscModuleMapping":{}};

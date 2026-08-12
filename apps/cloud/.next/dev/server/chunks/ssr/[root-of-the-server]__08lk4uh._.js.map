@@ -1,6 +1,0 @@
-{
-  "version": 3,
-  "sources": [],
-  "sections": [
-    {"offset": {"line": 10, "column": 0}, "map": {"version":3,"sources":["file:///Users/asthaaimac/Code/Aj/restroReserve/apps/cloud/src/app/page.tsx"],"sourcesContent":["export const dynamic = \"force-dynamic\";\n\nexport default function Home() {\n  return (\n    <main className=\"mx-auto max-w-xl px-5 py-16\">\n      <h1 className=\"font-display text-3xl\">RestroReserve Cloud</h1>\n      <p className=\"mt-3 text-ink-soft\">\n        The hosted service. Sign-up, tenant branding and the shared POS screens\n        are being built on top of the same domain package the self-hosted build\n        uses, so both stay in step.\n      </p>\n      <p className=\"mt-6 text-sm text-ink-soft\">\n        Health: <code className=\"font-mono\">/api/health</code>\n      </p>\n    </main>\n  );\n}\n"],"names":["dynamic","Home","className"],"mappings":";;;;;;;;AAAO,MAAMA,UAAU;AAER,SAASC;IACtB,qBACE,8OAAC;QAAKC,WAAU;;0BACd,8OAAC;gBAAGA,WAAU;0BAAwB;;;;;;0BACtC,8OAAC;gBAAEA,WAAU;0BAAqB;;;;;;0BAKlC,8OAAC;gBAAEA,WAAU;;oBAA6B;kCAChC,8OAAC;wBAAKA,WAAU;kCAAY;;;;;;;;;;;;;;;;;;AAI5C"}}]
-}
