@@ -284,8 +284,8 @@ jobs:
           # binaries to a host that regenerates them anyway.
           rm -rf release/.next/cache release/.next/dev release/.next/node_modules
 
-          cp -r public release/public
-          cp server.js next.config.ts release/
+          cp -r apps/outlet/public release/public
+          cp apps/outlet/server.js apps/outlet/next.config.ts release/
 
           # Schema and migrations travel with the release so the live database's
           # expected shape is visible on the host, and so `prisma migrate deploy`
