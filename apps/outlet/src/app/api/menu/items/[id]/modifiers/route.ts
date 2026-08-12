@@ -1,6 +1,6 @@
 import { setItemModifiers } from "@/lib/modifiers";
 import { requireRole } from "@/lib/session";
-import { itemModifiersSchema } from "@/lib/validation";
+import { itemModifiersSchema } from "@restro/domain/validation";
 import { handle } from "../../../../respond";
 
 /** Replace which extras this item offers — the manager sends the full set. */

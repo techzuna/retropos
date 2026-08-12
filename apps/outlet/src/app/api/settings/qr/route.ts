@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { PosError } from "@/lib/errors";
+import { PosError } from "@restro/domain/errors";
 import { requireRole } from "@/lib/session";
 import { readQrImage, saveQrImage } from "@/lib/uploads";
 import { handle } from "../../respond";

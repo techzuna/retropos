@@ -1,6 +1,6 @@
 import { seatTable } from "@/lib/orders";
 import { requireRole } from "@/lib/session";
-import { seatTableSchema } from "@/lib/validation";
+import { seatTableSchema } from "@restro/domain/validation";
 import { handle } from "../respond";
 
 export async function POST(request: Request) {

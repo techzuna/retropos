@@ -1,4 +1,4 @@
-import { PosError } from "./errors";
+import { PosError } from "@restro/domain/errors";
 import type { DeviceContext } from "./session";
 
 /**

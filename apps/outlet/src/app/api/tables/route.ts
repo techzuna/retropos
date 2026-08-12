@@ -1,7 +1,7 @@
 import { getTableBoard } from "@/lib/orders";
 import { createTable } from "@/lib/tables";
 import { requireRole } from "@/lib/session";
-import { tableSchema } from "@/lib/validation";
+import { tableSchema } from "@restro/domain/validation";
 import { handle } from "../respond";
 
 /** The live board — every signed-in staff member's home screen. */

@@ -1,6 +1,6 @@
 import { createModifier, listModifiers } from "@/lib/modifiers";
 import { requireRole } from "@/lib/session";
-import { modifierSchema } from "@/lib/validation";
+import { modifierSchema } from "@restro/domain/validation";
 import { handle } from "../../respond";
 
 /** Staff need the catalogue to render the extras rows on the order screen. */

@@ -1,4 +1,4 @@
-import { PosError } from "./errors";
+import { PosError } from "@restro/domain/errors";
 import {
   ACTIVE_RESERVATION_STATUSES,
   ALL_DAY_LABEL,
@@ -6,8 +6,8 @@ import {
   HOLDING_RESERVATION_STATUSES,
   displayReservationStatus,
   type ReservationStatus,
-} from "./constants";
-import { isCanonicalDate, isCanonicalTime, localDate, wallTimeToUtc } from "./time";
+} from "@restro/domain/constants";
+import { isCanonicalDate, isCanonicalTime, localDate, wallTimeToUtc } from "@restro/domain/time";
 import type { SessionContext } from "./session";
 
 /**

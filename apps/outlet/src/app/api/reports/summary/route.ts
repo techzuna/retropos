@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { salesSummary } from "@/lib/reports";
 import { requireRole } from "@/lib/session";
-import { reportQuerySchema } from "@/lib/validation";
+import { reportQuerySchema } from "@restro/domain/validation";
 import { handle } from "../../respond";
 
 export async function GET(request: NextRequest) {

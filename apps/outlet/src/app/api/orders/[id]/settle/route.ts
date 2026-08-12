@@ -1,6 +1,6 @@
 import { settleOrder } from "@/lib/orders";
 import { requireRole } from "@/lib/session";
-import { settleSchema } from "@/lib/validation";
+import { settleSchema } from "@restro/domain/validation";
 import { handle } from "../../../respond";
 
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {

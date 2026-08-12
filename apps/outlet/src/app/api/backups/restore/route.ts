@@ -1,6 +1,6 @@
 import { restoreFromFile } from "@/lib/backup";
 import { requireRole } from "@/lib/session";
-import { restoreSchema } from "@/lib/validation";
+import { restoreSchema } from "@restro/domain/validation";
 import { handle } from "../../respond";
 
 export async function POST(request: Request) {

@@ -3,8 +3,8 @@ import Link from "next/link";
 import { getOutletProfile } from "@/lib/outlet";
 import { salesSummary, type ReportGroupBy } from "@/lib/reports";
 import { requireRole } from "@/lib/session";
-import { addDays, localDate } from "@/lib/time";
-import { formatPrice } from "@/lib/format";
+import { addDays, localDate } from "@restro/domain/time";
+import { formatPrice } from "@restro/domain/format";
 
 export const metadata: Metadata = { title: "Reports" };
 

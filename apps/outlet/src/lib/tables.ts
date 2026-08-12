@@ -1,4 +1,4 @@
-import { PosError } from "./errors";
+import { PosError } from "@restro/domain/errors";
 import type { SessionContext } from "./session";
 
 // Floor-plan management: the tables themselves, their seats, and where they

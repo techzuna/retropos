@@ -1,6 +1,6 @@
 import { createReservation, listReservations } from "@/lib/reservations";
 import { requireRole } from "@/lib/session";
-import { reservationQuerySchema, reservationSchema } from "@/lib/validation";
+import { reservationQuerySchema, reservationSchema } from "@restro/domain/validation";
 import { handle } from "../respond";
 
 // Bookings are floor work — whoever answers the phone takes them — so these are

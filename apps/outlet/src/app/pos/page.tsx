@@ -3,9 +3,9 @@ import { getOutletProfile } from "@/lib/outlet";
 import { getTableBoard } from "@/lib/orders";
 import { listTables } from "@/lib/tables";
 import { requireSession } from "@/lib/session";
-import { formatPrice } from "@/lib/format";
-import { localTimeLabel } from "@/lib/time";
-import { roleAtLeast, TABLE_SHAPES, ZONE_SUGGESTIONS } from "@/lib/constants";
+import { formatPrice } from "@restro/domain/format";
+import { localTimeLabel } from "@restro/domain/time";
+import { roleAtLeast, TABLE_SHAPES, ZONE_SUGGESTIONS } from "@restro/domain/constants";
 import { TableBoard, type BoardTile } from "./table-board";
 
 export const metadata: Metadata = { title: "Tables" };

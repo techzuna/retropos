@@ -31,8 +31,8 @@ const { createModifier, setItemModifiers, listModifiers, deleteModifier } = awai
 const { createTable, updateTable, deleteTable, listTables } = await import("@/lib/tables");
 const { createServicePeriod, listServicePeriods, updateServicePeriod, deleteServicePeriod } =
   await import("@/lib/service-periods");
-const { localDate } = await import("@/lib/time");
-const { PosError } = await import("@/lib/errors");
+const { localDate } = await import("@restro/domain/time");
+const { PosError } = await import("@restro/domain/errors");
 
 let ctxA: SessionContext; // staff at outlet A
 let ctxB: SessionContext; // staff at outlet B (same org — isolation must still hold)
@@ -181,7 +181,7 @@ describe("reports", () => {
     expect(line.priceCents).toBe(99999); // fresh snapshot of the edited price
     await settleOrder(ctxA, order.id, "cash");
 
-    const { localDate } = await import("@/lib/time");
+    const { localDate } = await import("@restro/domain/time");
     const today = localDate(new Date(), "Asia/Kathmandu");
     const summary = await salesSummary(managerA, { from: today, to: today, groupBy: "day" });
 

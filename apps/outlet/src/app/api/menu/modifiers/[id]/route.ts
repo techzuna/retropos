@@ -1,6 +1,6 @@
 import { deleteModifier, updateModifier } from "@/lib/modifiers";
 import { requireRole } from "@/lib/session";
-import { modifierPatchSchema } from "@/lib/validation";
+import { modifierPatchSchema } from "@restro/domain/validation";
 import { handle } from "../../../respond";
 
 type Ctx = { params: Promise<{ id: string }> };

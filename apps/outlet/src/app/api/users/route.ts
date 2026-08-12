@@ -1,6 +1,6 @@
 import { createUser, listUsers } from "@/lib/admin";
 import { requireRole } from "@/lib/session";
-import { userCreateSchema } from "@/lib/validation";
+import { userCreateSchema } from "@restro/domain/validation";
 import { handle } from "../respond";
 
 export async function GET() {

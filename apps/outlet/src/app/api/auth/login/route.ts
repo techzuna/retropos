@@ -1,5 +1,5 @@
 import { loginWithPassword } from "@/lib/auth";
-import { loginSchema } from "@/lib/validation";
+import { loginSchema } from "@restro/domain/validation";
 import { clientKeyOf, handle } from "../../respond";
 
 export async function POST(request: Request) {

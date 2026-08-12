@@ -1,5 +1,5 @@
-import { PosError } from "./errors";
-import { DEFAULT_CUSTOMER_NAME, type PaymentMethod } from "./constants";
+import { PosError } from "@restro/domain/errors";
+import { DEFAULT_CUSTOMER_NAME, type PaymentMethod } from "@restro/domain/constants";
 import { reservationHoldsByTable } from "./reservations";
 import type { SessionContext } from "./session";
 

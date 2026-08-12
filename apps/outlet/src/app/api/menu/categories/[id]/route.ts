@@ -1,6 +1,6 @@
 import { deleteCategory, updateCategory } from "@/lib/menu";
 import { requireRole } from "@/lib/session";
-import { categoryPatchSchema } from "@/lib/validation";
+import { categoryPatchSchema } from "@restro/domain/validation";
 import { handle } from "../../../respond";
 
 type Ctx = { params: Promise<{ id: string }> };

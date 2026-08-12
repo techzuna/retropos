@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { lineTotalCents, orderTotalCents } from "@/lib/orders";
-import { formatDuration } from "@/lib/format";
-import { displayReservationStatus } from "@/lib/constants";
+import { formatDuration } from "@restro/domain/format";
+import { displayReservationStatus } from "@restro/domain/constants";
 import { bucketSettledOrders } from "@/lib/reports";
 import { windowsOverlap } from "@/lib/reservations";
-import { roleAtLeast } from "@/lib/constants";
+import { roleAtLeast } from "@restro/domain/constants";
 import {
   addDays,
   isCanonicalDate,
@@ -13,7 +13,7 @@ import {
   localDayStartUtc,
   localTimeLabel,
   wallTimeToUtc,
-} from "@/lib/time";
+} from "@restro/domain/time";
 import {
   outletPatchSchema,
   pinSwitchSchema,
@@ -22,7 +22,7 @@ import {
   tableSchema,
   userCreateSchema,
   userPatchSchema,
-} from "@/lib/validation";
+} from "@restro/domain/validation";
 
 describe("orderTotalCents", () => {
   it("sums line snapshots as integers", () => {

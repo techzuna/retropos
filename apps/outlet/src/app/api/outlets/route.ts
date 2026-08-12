@@ -1,6 +1,6 @@
 import { createOutlet, listOutlets } from "@/lib/admin";
 import { requireRole } from "@/lib/session";
-import { outletSchema } from "@/lib/validation";
+import { outletSchema } from "@restro/domain/validation";
 import { handle } from "../respond";
 
 export async function GET() {

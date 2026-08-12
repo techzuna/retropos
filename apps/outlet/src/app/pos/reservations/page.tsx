@@ -3,9 +3,9 @@ import { listReservations } from "@/lib/reservations";
 import { listBookableTables } from "@/lib/tables";
 import { listServicePeriods } from "@/lib/service-periods";
 import { requireSession } from "@/lib/session";
-import { roleAtLeast } from "@/lib/constants";
-import { addDays, localDate, localTimeLabel } from "@/lib/time";
-import { ZONE_SUGGESTIONS } from "@/lib/constants";
+import { roleAtLeast } from "@restro/domain/constants";
+import { addDays, localDate, localTimeLabel } from "@restro/domain/time";
+import { ZONE_SUGGESTIONS } from "@restro/domain/constants";
 import { ReservationManager } from "./reservation-manager";
 
 export const metadata: Metadata = { title: "Bookings" };

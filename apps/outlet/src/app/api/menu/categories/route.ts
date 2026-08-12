@@ -1,6 +1,6 @@
 import { createCategory, getFullMenu } from "@/lib/menu";
 import { requireRole } from "@/lib/session";
-import { categorySchema } from "@/lib/validation";
+import { categorySchema } from "@restro/domain/validation";
 import { handle } from "../../respond";
 
 export async function GET() {

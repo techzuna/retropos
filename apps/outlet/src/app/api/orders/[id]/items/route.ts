@@ -1,6 +1,6 @@
 import { addOrderItem } from "@/lib/orders";
 import { requireRole } from "@/lib/session";
-import { addItemSchema } from "@/lib/validation";
+import { addItemSchema } from "@restro/domain/validation";
 import { handle } from "../../../respond";
 
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {

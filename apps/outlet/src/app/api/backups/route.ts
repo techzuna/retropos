@@ -5,7 +5,7 @@ import {
   writeBackup,
 } from "@/lib/backup";
 import { requireRole } from "@/lib/session";
-import { backupSettingsSchema } from "@/lib/validation";
+import { backupSettingsSchema } from "@restro/domain/validation";
 import { handle } from "../respond";
 
 export async function GET() {

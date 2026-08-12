@@ -1,6 +1,6 @@
 import { cancelReservation, updateReservation } from "@/lib/reservations";
 import { requireRole } from "@/lib/session";
-import { reservationPatchSchema } from "@/lib/validation";
+import { reservationPatchSchema } from "@restro/domain/validation";
 import { handle } from "../../respond";
 
 type Ctx = { params: Promise<{ id: string }> };

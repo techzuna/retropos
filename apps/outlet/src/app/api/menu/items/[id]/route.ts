@@ -1,6 +1,6 @@
 import { deleteItem, updateItem } from "@/lib/menu";
 import { requireRole } from "@/lib/session";
-import { menuItemPatchSchema } from "@/lib/validation";
+import { menuItemPatchSchema } from "@restro/domain/validation";
 import { handle } from "../../../respond";
 
 type Ctx = { params: Promise<{ id: string }> };

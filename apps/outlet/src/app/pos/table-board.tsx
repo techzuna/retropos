@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { formatDuration } from "@/lib/format";
+import { formatDuration } from "@restro/domain/format";
 import { PendingCardLink } from "@/components/PendingLink";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { TableDiagram } from "@/components/TableDiagram";

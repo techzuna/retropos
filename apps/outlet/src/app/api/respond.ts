@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
-import { PosError } from "@/lib/errors";
+import { PosError } from "@restro/domain/errors";
 
 /**
  * Uniform route wrapper: PosError → its status, ZodError → 422, everything

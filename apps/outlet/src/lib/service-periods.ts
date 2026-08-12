@@ -1,6 +1,6 @@
-import { PosError } from "./errors";
-import { DEFAULT_SERVICE_PERIODS } from "./constants";
-import { isCanonicalTime } from "./time";
+import { PosError } from "@restro/domain/errors";
+import { DEFAULT_SERVICE_PERIODS } from "@restro/domain/constants";
+import { isCanonicalTime } from "@restro/domain/time";
 import type { SessionContext } from "./session";
 
 /**

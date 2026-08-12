@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { formatPrice } from "@/lib/format";
+import { formatPrice } from "@restro/domain/format";
 import { useDialog } from "@/components/Dialog";
 import { failureMessage } from "@/lib/fetch-error";
 

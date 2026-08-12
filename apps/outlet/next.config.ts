@@ -2,6 +2,12 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /*
+   * Workspace packages ship TypeScript source rather than a build step, so
+   * Next has to compile them like app code. One fewer build to keep in sync,
+   * and a domain change is picked up by `next dev` immediately.
+   */
+  transpilePackages: ["@restro/domain"],
+  /*
    * Resolve the native/database packages with a plain Node `require` at
    * runtime, instead of letting Turbopack alias them to content-hashed names
    * under `.next/node_modules`.

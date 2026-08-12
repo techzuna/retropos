@@ -1,6 +1,6 @@
 import { deleteServicePeriod, updateServicePeriod } from "@/lib/service-periods";
 import { requireRole } from "@/lib/session";
-import { servicePeriodPatchSchema } from "@/lib/validation";
+import { servicePeriodPatchSchema } from "@restro/domain/validation";
 import { handle } from "../../../respond";
 
 type Ctx = { params: Promise<{ id: string }> };

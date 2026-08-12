@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getOutletProfile } from "@/lib/outlet";
-import { roleAtLeast } from "@/lib/constants";
+import { roleAtLeast } from "@restro/domain/constants";
 import type { SessionContext } from "@/lib/session";
 import { LogoutButton } from "./LogoutButton";
 import { PendingLink } from "./PendingLink";

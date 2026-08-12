@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getDevice, getSession, type SessionContext } from "./session";
-import { roleAtLeast, type Role } from "./constants";
+import { roleAtLeast, type Role } from "@restro/domain/constants";
 
 /**
  * Gate a page on someone being signed in, and optionally on their role.

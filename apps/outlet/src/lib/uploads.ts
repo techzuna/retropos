@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { PosError } from "./errors";
+import { PosError } from "@restro/domain/errors";
 import { uploadsDir } from "./paths";
 import type { SessionContext } from "./session";
 

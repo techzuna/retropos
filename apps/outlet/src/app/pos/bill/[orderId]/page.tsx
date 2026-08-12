@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { getOutletProfile } from "@/lib/outlet";
 import { getOrder } from "@/lib/orders";
 import { requireSession } from "@/lib/session";
-import { formatDateTime, formatPrice } from "@/lib/format";
+import { formatDateTime, formatPrice } from "@restro/domain/format";
 import { PrintButton } from "./print-button";
 
 export const metadata: Metadata = { title: "Bill" };

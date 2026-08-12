@@ -5,7 +5,7 @@ import { getOrderingMenu } from "@/lib/menu";
 import { listModifiers } from "@/lib/modifiers";
 import { getOrder, getTableForOrdering } from "@/lib/orders";
 import { requireSession } from "@/lib/session";
-import { localTimeLabel } from "@/lib/time";
+import { localTimeLabel } from "@restro/domain/time";
 import { SeatForm } from "./seat-form";
 import { OrderScreen } from "./order-screen";
 

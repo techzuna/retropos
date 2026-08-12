@@ -1,6 +1,6 @@
 import { createServicePeriod, listServicePeriods } from "@/lib/service-periods";
 import { requireRole } from "@/lib/session";
-import { servicePeriodSchema } from "@/lib/validation";
+import { servicePeriodSchema } from "@restro/domain/validation";
 import { handle } from "../../respond";
 
 /** Staff need the list to take a booking; only a manager sets the hours. */

@@ -1,8 +1,8 @@
-import { PosError } from "./errors";
+import { PosError } from "@restro/domain/errors";
 import { hashSecret } from "./auth";
 import type { OrgContext } from "./db";
 import type { SessionContext } from "./session";
-import type { Role } from "./constants";
+import type { Role } from "@restro/domain/constants";
 
 // Owner-scope administration: outlets and users. Every function is scoped to
 // the session's organization — an owner can never touch another org.

@@ -1,6 +1,6 @@
 import { createItem } from "@/lib/menu";
 import { requireRole } from "@/lib/session";
-import { menuItemSchema } from "@/lib/validation";
+import { menuItemSchema } from "@restro/domain/validation";
 import { handle } from "../../respond";
 
 export async function POST(request: Request) {

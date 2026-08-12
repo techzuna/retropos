@@ -1,6 +1,6 @@
 import { deleteTable, updateTable } from "@/lib/tables";
 import { requireRole } from "@/lib/session";
-import { tablePatchSchema } from "@/lib/validation";
+import { tablePatchSchema } from "@restro/domain/validation";
 import { handle } from "../../respond";
 
 type Ctx = { params: Promise<{ id: string }> };

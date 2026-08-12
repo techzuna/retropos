@@ -1,7 +1,7 @@
 import { mkdir, readFile, readdir, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { resolveDb, type Db, type OrgContext } from "./db";
-import { PosError } from "./errors";
+import { PosError } from "@restro/domain/errors";
 import { backupDir } from "./paths";
 
 // v2 added `reservations`; v3 the extras catalogue and its links; v4 service

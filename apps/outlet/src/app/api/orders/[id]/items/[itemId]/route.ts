@@ -1,6 +1,6 @@
 import { removeOrderItem, updateOrderItem } from "@/lib/orders";
 import { requireRole } from "@/lib/session";
-import { updateItemSchema } from "@/lib/validation";
+import { updateItemSchema } from "@restro/domain/validation";
 import { handle } from "../../../../respond";
 
 type Ctx = { params: Promise<{ id: string; itemId: string }> };

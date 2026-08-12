@@ -1,6 +1,6 @@
 import { signInWithPin } from "@/lib/auth";
 import { requireDevice } from "@/lib/session";
-import { pinSwitchSchema } from "@/lib/validation";
+import { pinSwitchSchema } from "@restro/domain/validation";
 import { clientKeyOf, handle } from "../../respond";
 
 /**
