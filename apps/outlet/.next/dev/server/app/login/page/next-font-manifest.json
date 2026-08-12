@@ -1,0 +1,12 @@
+{
+  "pages": {},
+  "app": {
+    "[project]/apps/outlet/src/app/login/page": [
+      "static/media/d0f5953821b08bc1-s.p.1sj2vuw194_rx.woff2",
+      "static/media/f7aa21714c1c53f8-s.p.0-95eo-012xnf.woff2",
+      "static/media/797e433ab948586e-s.p.0r6juujl39pe6.woff2"
+    ]
+  },
+  "appUsingSizeAdjust": true,
+  "pagesUsingSizeAdjust": false
+}

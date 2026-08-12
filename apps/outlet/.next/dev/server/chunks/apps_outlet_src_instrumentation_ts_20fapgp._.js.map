@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 4, "column": 0}, "map": {"version":3,"sources":["file:///Users/asthaaimac/Code/Aj/restroReserve/apps/outlet/src/instrumentation.ts"],"sourcesContent":["export async function register() {\n  if (process.env.NEXT_RUNTIME === \"nodejs\") {\n    const { startBackupScheduler } = await import(\"./lib/backup-scheduler\");\n    startBackupScheduler();\n  }\n}\n"],"names":["register","startBackupScheduler"],"mappings":";;;;AAAO,eAAeA;IACpB,wCAA2C;QACzC,MAAM,EAAEC,oBAAoB,EAAE,GAAG;QACjCA;IACF;AACF"}}]
+}

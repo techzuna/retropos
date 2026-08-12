@@ -1,36 +1,68 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# RestroReserve
 
-## Getting Started
+A restaurant point of sale, in two builds that share one codebase:
 
-First, run the development server:
+- **`apps/outlet`** — self-hosted on a box in the restaurant. SQLite, one
+  process, keeps taking orders when the internet drops. This is what is live
+  today.
+- **`apps/cloud`** — the hosted multi-tenant service. Postgres, many
+  restaurants, subscription. Being built.
+
+Feature code lives in `packages/` so the two cannot drift apart: fix a rounding
+bug once and both get it.
+
+## Running it locally
+
+Everything is run from the repository root.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install                      # installs every workspace at once
+
+npm run outlet -- dev -- -p 3111 # the app at http://localhost:3111
+                                 # 3000 is usually taken on this machine
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Then open http://localhost:3111 and sign in. Seeded demo credentials are in
+CREDENTIALS.md; the owner is `yogalajay@gmail.com` / `owner1234`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Is it healthy? `curl -s localhost:3111/api/health` answers without a login and
+names what is broken:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```json
+{"ok":true,"node":"v20","driver":"ok","wasm":"ok","database":"ok"}
+```
 
-## Learn More
+A `database-url-not-a-file` reason means `apps/outlet/.env` is missing —
+copy `.env.example` beside it and set `SESSION_SECRET`.
 
-To learn more about Next.js, take a look at the following resources:
+## The checks CI runs
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm test          # every workspace
+npm run lint
+npm run typecheck
+npm run db:check  # the two schemas still match packages/db/models.prisma
+npm run build     # production build
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Changing the data model
 
-## Deploy on Vercel
+Edit `packages/db/models.prisma` — never an app's `schema.prisma`, which is
+generated and will be overwritten.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npm run db:compose                                   # rewrite both schemas
+cd apps/outlet && npx prisma migrate dev --name what_changed
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+`npm run db:check` fails the build if a generated schema was hand-edited, which
+is what stops the outlet and the cloud growing different columns.
+
+## Where things are
+
+| | |
+|---|---|
+| `PRD.md` | what to build and why |
+| `DESIGN.md` | architecture, data model, RBAC |
+| `DEPLOY.md` | self-hosted deployment |
+| `CONVERSATION_LOG.md` | decision history, newest first |
