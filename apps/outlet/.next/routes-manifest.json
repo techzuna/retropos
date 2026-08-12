@@ -1,0 +1,399 @@
+{
+  "version": 3,
+  "pages404": true,
+  "appType": "app",
+  "caseSensitive": false,
+  "basePath": "",
+  "redirects": [
+    {
+      "source": "/:path+/",
+      "destination": "/:path+",
+      "internal": true,
+      "priority": true,
+      "statusCode": 308,
+      "regex": "^(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))/$"
+    }
+  ],
+  "headers": [],
+  "onMatchHeaders": [],
+  "rewrites": {
+    "beforeFiles": [],
+    "afterFiles": [],
+    "fallback": []
+  },
+  "dynamicRoutes": [
+    {
+      "page": "/api/menu/categories/[id]",
+      "regex": "^/api/menu/categories/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/menu/categories/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/menu/items/[id]",
+      "regex": "^/api/menu/items/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/menu/items/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/menu/items/[id]/image",
+      "regex": "^/api/menu/items/([^/]+?)/image(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/menu/items/(?<nxtPid>[^/]+?)/image(?:/)?$"
+    },
+    {
+      "page": "/api/menu/items/[id]/modifiers",
+      "regex": "^/api/menu/items/([^/]+?)/modifiers(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/menu/items/(?<nxtPid>[^/]+?)/modifiers(?:/)?$"
+    },
+    {
+      "page": "/api/menu/modifiers/[id]",
+      "regex": "^/api/menu/modifiers/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/menu/modifiers/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/orders/[id]",
+      "regex": "^/api/orders/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/orders/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/orders/[id]/cancel",
+      "regex": "^/api/orders/([^/]+?)/cancel(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/orders/(?<nxtPid>[^/]+?)/cancel(?:/)?$"
+    },
+    {
+      "page": "/api/orders/[id]/items",
+      "regex": "^/api/orders/([^/]+?)/items(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/orders/(?<nxtPid>[^/]+?)/items(?:/)?$"
+    },
+    {
+      "page": "/api/orders/[id]/items/[itemId]",
+      "regex": "^/api/orders/([^/]+?)/items/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid",
+        "nxtPitemId": "nxtPitemId"
+      },
+      "namedRegex": "^/api/orders/(?<nxtPid>[^/]+?)/items/(?<nxtPitemId>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/orders/[id]/settle",
+      "regex": "^/api/orders/([^/]+?)/settle(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/orders/(?<nxtPid>[^/]+?)/settle(?:/)?$"
+    },
+    {
+      "page": "/api/outlets/[id]",
+      "regex": "^/api/outlets/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/outlets/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/reservations/[id]",
+      "regex": "^/api/reservations/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/reservations/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/reservations/[id]/confirm",
+      "regex": "^/api/reservations/([^/]+?)/confirm(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/reservations/(?<nxtPid>[^/]+?)/confirm(?:/)?$"
+    },
+    {
+      "page": "/api/reservations/[id]/no-show",
+      "regex": "^/api/reservations/([^/]+?)/no\\-show(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/reservations/(?<nxtPid>[^/]+?)/no\\-show(?:/)?$"
+    },
+    {
+      "page": "/api/reservations/[id]/seat",
+      "regex": "^/api/reservations/([^/]+?)/seat(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/reservations/(?<nxtPid>[^/]+?)/seat(?:/)?$"
+    },
+    {
+      "page": "/api/settings/service-periods/[id]",
+      "regex": "^/api/settings/service\\-periods/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/settings/service\\-periods/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/tables/[id]",
+      "regex": "^/api/tables/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/tables/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/users/[id]",
+      "regex": "^/api/users/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/users/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/pos/bill/[orderId]",
+      "regex": "^/pos/bill/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPorderId": "nxtPorderId"
+      },
+      "namedRegex": "^/pos/bill/(?<nxtPorderId>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/pos/tables/[tableId]",
+      "regex": "^/pos/tables/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPtableId": "nxtPtableId"
+      },
+      "namedRegex": "^/pos/tables/(?<nxtPtableId>[^/]+?)(?:/)?$"
+    }
+  ],
+  "staticRoutes": [
+    {
+      "page": "/",
+      "regex": "^/(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/(?:/)?$"
+    },
+    {
+      "page": "/_global-error",
+      "regex": "^/_global\\-error(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/_global\\-error(?:/)?$"
+    },
+    {
+      "page": "/_not-found",
+      "regex": "^/_not\\-found(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/_not\\-found(?:/)?$"
+    },
+    {
+      "page": "/admin",
+      "regex": "^/admin(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin(?:/)?$"
+    },
+    {
+      "page": "/api/auth/login",
+      "regex": "^/api/auth/login(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/auth/login(?:/)?$"
+    },
+    {
+      "page": "/api/auth/logout",
+      "regex": "^/api/auth/logout(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/auth/logout(?:/)?$"
+    },
+    {
+      "page": "/api/auth/outlet",
+      "regex": "^/api/auth/outlet(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/auth/outlet(?:/)?$"
+    },
+    {
+      "page": "/api/auth/pin",
+      "regex": "^/api/auth/pin(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/auth/pin(?:/)?$"
+    },
+    {
+      "page": "/api/auth/session",
+      "regex": "^/api/auth/session(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/auth/session(?:/)?$"
+    },
+    {
+      "page": "/api/auth/unpair",
+      "regex": "^/api/auth/unpair(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/auth/unpair(?:/)?$"
+    },
+    {
+      "page": "/api/backups",
+      "regex": "^/api/backups(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/backups(?:/)?$"
+    },
+    {
+      "page": "/api/backups/restore",
+      "regex": "^/api/backups/restore(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/backups/restore(?:/)?$"
+    },
+    {
+      "page": "/api/health",
+      "regex": "^/api/health(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/health(?:/)?$"
+    },
+    {
+      "page": "/api/menu",
+      "regex": "^/api/menu(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/menu(?:/)?$"
+    },
+    {
+      "page": "/api/menu/categories",
+      "regex": "^/api/menu/categories(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/menu/categories(?:/)?$"
+    },
+    {
+      "page": "/api/menu/items",
+      "regex": "^/api/menu/items(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/menu/items(?:/)?$"
+    },
+    {
+      "page": "/api/menu/modifiers",
+      "regex": "^/api/menu/modifiers(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/menu/modifiers(?:/)?$"
+    },
+    {
+      "page": "/api/orders",
+      "regex": "^/api/orders(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/orders(?:/)?$"
+    },
+    {
+      "page": "/api/outlets",
+      "regex": "^/api/outlets(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/outlets(?:/)?$"
+    },
+    {
+      "page": "/api/reports/summary",
+      "regex": "^/api/reports/summary(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/reports/summary(?:/)?$"
+    },
+    {
+      "page": "/api/reservations",
+      "regex": "^/api/reservations(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/reservations(?:/)?$"
+    },
+    {
+      "page": "/api/settings/qr",
+      "regex": "^/api/settings/qr(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/settings/qr(?:/)?$"
+    },
+    {
+      "page": "/api/settings/service-periods",
+      "regex": "^/api/settings/service\\-periods(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/settings/service\\-periods(?:/)?$"
+    },
+    {
+      "page": "/api/tables",
+      "regex": "^/api/tables(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/tables(?:/)?$"
+    },
+    {
+      "page": "/api/users",
+      "regex": "^/api/users(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/users(?:/)?$"
+    },
+    {
+      "page": "/favicon.ico",
+      "regex": "^/favicon\\.ico(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/favicon\\.ico(?:/)?$"
+    },
+    {
+      "page": "/login",
+      "regex": "^/login(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/login(?:/)?$"
+    },
+    {
+      "page": "/manage/menu",
+      "regex": "^/manage/menu(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/manage/menu(?:/)?$"
+    },
+    {
+      "page": "/manage/reports",
+      "regex": "^/manage/reports(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/manage/reports(?:/)?$"
+    },
+    {
+      "page": "/pos",
+      "regex": "^/pos(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/pos(?:/)?$"
+    },
+    {
+      "page": "/pos/reservations",
+      "regex": "^/pos/reservations(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/pos/reservations(?:/)?$"
+    },
+    {
+      "page": "/signin",
+      "regex": "^/signin(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/signin(?:/)?$"
+    }
+  ],
+  "dataRoutes": [],
+  "rsc": {
+    "header": "rsc",
+    "varyHeader": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+    "prefetchHeader": "next-router-prefetch",
+    "didPostponeHeader": "x-nextjs-postponed",
+    "contentTypeHeader": "text/x-component",
+    "suffix": ".rsc",
+    "prefetchSegmentHeader": "next-router-segment-prefetch",
+    "prefetchSegmentSuffix": ".segment.rsc",
+    "prefetchSegmentDirSuffix": ".segments",
+    "clientParamParsing": false,
+    "dynamicRSCPrerender": false
+  },
+  "rewriteHeaders": {
+    "pathHeader": "x-nextjs-rewritten-path",
+    "queryHeader": "x-nextjs-rewritten-query"
+  }
+}

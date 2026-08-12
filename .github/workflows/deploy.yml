@@ -122,10 +122,10 @@ jobs:
           if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
             echo "::notice::No previous commit to compare against (first push or manual run)."
             echo "Skipping the migration check — verify by hand that the live"
-            echo "data/app.db already has every migration in prisma/migrations."
+            echo "data/app.db already has every migration in apps/outlet/prisma/migrations."
             exit 0
           fi
-          changed=$(git diff --name-only "$BEFORE" "${{ github.sha }}" -- prisma/migrations || true)
+          changed=$(git diff --name-only "$BEFORE" "${{ github.sha }}" -- apps/outlet/prisma/migrations || true)
           if [ -n "$changed" ]; then
             echo "::error::This release adds or changes migrations:"
             echo "$changed" | sed 's/^/  /'
@@ -143,6 +143,9 @@ jobs:
           fi
           echo "No migration changes in this push — safe to ship."
 
+      # Every path below is relative to the outlet app, not the monorepo root:
+      # the repo now holds two products (apps/outlet, apps/cloud) over a shared
+      # packages/ tree, and this workflow ships only the self-hosted one.
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
@@ -176,7 +179,7 @@ jobs:
       # environment variables are needed — every route is force-dynamic, so the
       # build never opens the database.
       - name: Build
-        run: npm run build
+        run: npm run build --workspace apps/outlet
 
       # Compile better-sqlite3 against an ancient glibc so it loads on hosts
       # that can neither use the published prebuilts (linked against 2.29+,
@@ -198,7 +201,7 @@ jobs:
         env:
           NODE_MAJOR: ${{ vars.NODE_VERSION || 22 }}
         run: |
-          version=$(node -p "require('./node_modules/better-sqlite3/package.json').version")
+          version=$(node -p "require('better-sqlite3/package.json').version")
           # Build for both LTS ABIs so either cPanel Node setting works:
           # "<semver>:<abi>" pairs, read from Node's own release index.
           targets=$(curl -fsSL https://nodejs.org/dist/index.json | node -e '
@@ -267,7 +270,7 @@ jobs:
           # The built app. server.js boots Next in production mode and serves
           # from .next; src/ is NOT needed at runtime (the Prisma client is
           # bundled into .next/server — verified). cache/ is build scratch.
-          cp -r .next release/.next
+          cp -r apps/outlet/.next release/.next
           # cache/ and dev/ are build and dev-server scratch (dev/ reaches
           # gigabytes on a developer's machine). node_modules/ inside .next is
           # empty after a build and only fills at boot, when Next materializes
@@ -282,14 +285,14 @@ jobs:
           # Schema and migrations travel with the release so the live database's
           # expected shape is visible on the host, and so `prisma migrate deploy`
           # works the day this moves somewhere with a shell.
-          cp -r prisma release/prisma
-          cp prisma.config.ts release/
+          cp -r apps/outlet/prisma release/prisma
+          cp apps/outlet/prisma.config.ts release/
 
           # Preflight the panel can actually run. On a plan with no shell, the
           # "Run JS script" button executes an npm script, and this is the only
           # way to see why the app is failing without reading stderr.log by eye.
           mkdir -p release/scripts
-          cp scripts/check-host.js scripts/install-native.js release/scripts/
+          cp apps/outlet/scripts/check-host.js apps/outlet/scripts/install-native.js release/scripts/
 
           # The old-glibc driver, put in place by server.js at boot.
           if ls vendor/*.node >/dev/null 2>&1; then
@@ -313,7 +316,7 @@ jobs:
           # "Cannot find module".
           node -e '
             const fs = require("fs");
-            const src = JSON.parse(fs.readFileSync("package.json", "utf8"));
+            const src = JSON.parse(fs.readFileSync("apps/outlet/package.json", "utf8"));
             const deps = {};
             for (const name of Object.keys(src.dependencies || {})) {
               deps[name] = JSON.parse(
@@ -497,7 +500,7 @@ jobs:
             echo ""
             echo "#### Migrations in this release"
             echo '```'
-            ls prisma/migrations | grep -v migration_lock || echo "(none)"
+            ls apps/outlet/prisma/migrations | grep -v migration_lock || echo "(none)"
             echo '```'
             echo "The live \`data/app.db\` must already have all of these."
           } >> $GITHUB_STEP_SUMMARY

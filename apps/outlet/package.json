@@ -1,0 +1,51 @@
+{
+  "name": "restroreserve",
+  "version": "0.1.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "private": true,
+  "scripts": {
+    "//postinstall": "src/generated/prisma is gitignored, so a fresh clone has no client and `tsc`, `vitest` and `next build` all fail on `Cannot find module '@/generated/prisma/client'`. Generating on install fixes every consumer at once — CI, a new machine, and the VPS recipes in DEPLOY.md. The cPanel release ships its own generated package.json without this hook, so the host never runs it.",
+    "postinstall": "prisma generate",
+    "dev": "next dev",
+    "//build:1": "src/generated/prisma is gitignored, so a fresh clone has no client: generate before building or the build dies on `Module not found: @/generated/prisma/client`.",
+    "//build:2": "--webpack, deliberately. Turbopack resolves native packages through content-hashed SYMLINKS in .next/node_modules (better-sqlite3-<hash> -> ../../node_modules/better-sqlite3). Those cannot survive an FTP upload, and a build that boots here dies on the host with `Cannot find module 'better-sqlite3-<hash>'`. The webpack build emits no .next/node_modules at all, so the release is portable — and a third the size. `next dev` still uses Turbopack.",
+    "build": "prisma generate && next build --webpack",
+    "start": "next start",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "migrate": "prisma migrate deploy",
+    "start:passenger": "NODE_ENV=production node server.js"
+  },
+  "dependencies": {
+    "@date-fns/tz": "^1.5.0",
+    "@prisma/adapter-better-sqlite3": "^7.9.1",
+    "@prisma/client": "^7.9.1",
+    "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^12.11.1",
+    "jose": "^6.2.4",
+    "next": "16.2.12",
+    "prisma": "^7.9.1",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "dotenv": "^17.4.2",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.12",
+    "tailwindcss": "^4",
+    "tsx": "^4.23.1",
+    "typescript": "^5",
+    "vitest": "^4.1.10"
+  }
+}
