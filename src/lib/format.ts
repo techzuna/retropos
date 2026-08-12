@@ -20,3 +20,23 @@ export function formatDateTime(instant: Date, timeZone: string): string {
     timeZone,
   }).format(instant);
 }
+
+/**
+ * How long a table has been sitting, written the way staff say it out loud:
+ * "40 min", "1 hr 6 min", "3 hr". Minutes are dropped past a day because
+ * nobody reads "29 hr 14 min" — at that point the number itself is the
+ * message, and it usually means an order nobody closed.
+ */
+export function formatDuration(minutes: number): string {
+  const total = Math.max(0, Math.floor(minutes));
+  if (total < 60) return `${total} min`;
+
+  const hours = Math.floor(total / 60);
+  const rest = total % 60;
+  if (hours >= 24) {
+    const days = Math.floor(hours / 24);
+    const spareHours = hours % 24;
+    return spareHours ? `${days}d ${spareHours} hr` : `${days}d`;
+  }
+  return rest ? `${hours} hr ${rest} min` : `${hours} hr`;
+}

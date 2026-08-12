@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { lineTotalCents, orderTotalCents } from "@/lib/orders";
+import { formatDuration } from "@/lib/format";
 import { displayReservationStatus } from "@/lib/constants";
 import { bucketSettledOrders } from "@/lib/reports";
 import { windowsOverlap } from "@/lib/reservations";
@@ -289,5 +290,28 @@ describe("table & reservation input validation", () => {
     expect(outletPatchSchema.safeParse({ timezone: "Mars/Olympus" }).success).toBe(false);
     expect(outletPatchSchema.safeParse({ timezone: "Kathmandu" }).success).toBe(false);
     expect(outletPatchSchema.safeParse({ timezone: "" }).success).toBe(false);
+  });
+});
+
+describe("formatDuration — how long a table has been sitting", () => {
+  it("reads as staff would say it", () => {
+    expect(formatDuration(0)).toBe("0 min");
+    expect(formatDuration(40)).toBe("40 min");
+    expect(formatDuration(59)).toBe("59 min");
+    expect(formatDuration(60)).toBe("1 hr");
+    expect(formatDuration(66)).toBe("1 hr 6 min");
+    expect(formatDuration(125)).toBe("2 hr 5 min");
+  });
+
+  it("switches to days rather than printing 29 hr 14 min", () => {
+    expect(formatDuration(1439)).toBe("23 hr 59 min");
+    expect(formatDuration(1440)).toBe("1d");
+    expect(formatDuration(1500)).toBe("1d 1 hr");
+    expect(formatDuration(17626)).toBe("12d 5 hr");
+  });
+
+  it("never renders a negative or fractional duration", () => {
+    expect(formatDuration(-5)).toBe("0 min");
+    expect(formatDuration(66.9)).toBe("1 hr 6 min");
   });
 });

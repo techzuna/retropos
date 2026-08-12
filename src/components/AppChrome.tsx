@@ -3,6 +3,7 @@ import { getOutletProfile } from "@/lib/outlet";
 import { roleAtLeast } from "@/lib/constants";
 import type { SessionContext } from "@/lib/session";
 import { LogoutButton } from "./LogoutButton";
+import { PendingLink } from "./PendingLink";
 
 /** Shared POS chrome: header nav by role, dhaka band, content column. */
 export async function AppChrome({
@@ -37,26 +38,26 @@ export async function AppChrome({
             `gap-y-2` for exactly that.
           */}
           <nav className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-1 text-sm">
-            <Link href="/pos" className="rounded px-2.5 py-2 hover:bg-madder-deep">
+            <PendingLink href="/pos" className="rounded px-2.5 py-2 hover:bg-madder-deep">
               Tables
-            </Link>
-            <Link href="/pos/reservations" className="rounded px-2.5 py-2 hover:bg-madder-deep">
+            </PendingLink>
+            <PendingLink href="/pos/reservations" className="rounded px-2.5 py-2 hover:bg-madder-deep">
               Bookings
-            </Link>
+            </PendingLink>
             {roleAtLeast(session.role, "manager") && (
               <>
-                <Link href="/manage/menu" className="rounded px-2.5 py-2 hover:bg-madder-deep">
+                <PendingLink href="/manage/menu" className="rounded px-2.5 py-2 hover:bg-madder-deep">
                   Menu
-                </Link>
-                <Link href="/manage/reports" className="rounded px-2.5 py-2 hover:bg-madder-deep">
+                </PendingLink>
+                <PendingLink href="/manage/reports" className="rounded px-2.5 py-2 hover:bg-madder-deep">
                   Reports
-                </Link>
+                </PendingLink>
               </>
             )}
             {session.role === "owner" && (
-              <Link href="/admin" className="rounded px-2.5 py-2 hover:bg-madder-deep">
+              <PendingLink href="/admin" className="rounded px-2.5 py-2 hover:bg-madder-deep">
                 Admin
-              </Link>
+              </PendingLink>
             )}
             <Link
               href="/signin"

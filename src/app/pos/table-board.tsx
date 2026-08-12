@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { formatDuration } from "@/lib/format";
+import { PendingCardLink } from "@/components/PendingLink";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { TableDiagram } from "@/components/TableDiagram";
 import { useDialog } from "@/components/Dialog";
@@ -212,7 +214,7 @@ export function TableBoard({
               <p className="truncate font-medium">{t.order.customerName}</p>
               <p className="font-mono text-madder-deep">{t.order.price}</p>
               <p className="text-xs text-ink-soft">
-                {`${t.order.itemCount} items · ${t.order.minutes} min`}
+                {`${t.order.itemCount} items · ${formatDuration(t.order.minutes)}`}
               </p>
               {t.order.holdNote && <p className="text-xs text-brass-deep">{t.order.holdNote}</p>}
             </div>
@@ -370,13 +372,13 @@ export function TableBoard({
                   </div>
                 </div>
               ) : (
-                <Link
+                <PendingCardLink
                   key={t.id}
                   href={`/pos/tables/${t.id}`}
                   className={`block border p-3 transition-colors ${tileClass(t)}`}
                 >
                   <TileBody t={t} />
-                </Link>
+                </PendingCardLink>
               ),
             )}
           </div>
